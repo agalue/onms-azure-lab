@@ -1,0 +1,50 @@
+#cloud-config
+package_upgrade: true
+
+write_files:
+  - owner: root:root
+    path: /etc/minion-overlay/org.opennms.minion.controller.cfg
+    content: |
+      location=${minion_location}
+      id=${minion_id}
+      http-url=http://${user}-onms.eastus.cloudapp.azure.com:8980/opennms
+
+  - owner: root:root
+    path: /etc/minion-overlay/featuresBoot.d/kafka.boot
+    content: |
+      !minion-jms
+      !opennms-core-ipc-sink-camel
+      !opennms-core-ipc-rpc-jms
+      opennms-core-ipc-sink-kafka
+      opennms-core-ipc-rpc-kafka
+
+  - owner: root:root
+    path: /etc/minion-overlay/org.opennms.core.ipc.sink.kafka.cfg
+    content: |
+      bootstrap.servers=${user}-kafka.${azure_location}.cloudapp.azure.com:9094
+
+  - owner: root:root
+    path: /etc/minion-overlay/org.opennms.core.ipc.rpc.kafka.cfg
+    content: |
+      bootstrap.servers=${user}-kafka.eastus.cloudapp.azure.com:9094
+      single-topic=true
+
+apt:
+  preserve_sources_list: true
+  sources:
+    opennms:
+      source: deb https://debian.opennms.org stable main
+
+packages:
+  - opennms-minion
+
+bootcmd:
+  - curl -s https://debian.opennms.org/OPENNMS-GPG-KEY | apt-key add -
+
+runcmd:
+  - rsync -avr /etc/minion-overlay/ /etc/minion/
+  - sed -i -r 's/# export JAVA_MIN_MEM=.*/export JAVA_MIN_MEM="${minion_heap}"/' /etc/default/minion
+  - sed -i -r 's/# export JAVA_MAX_MEM=.*/export JAVA_MAX_MEM="${minion_heap}"/' /etc/default/minion
+  - /usr/share/minion/bin/scvcli set opennms.http admin admin
+  - /usr/share/minion/bin/scvcli set opennms.broker admin admin
+  - systemctl --now enable minion
