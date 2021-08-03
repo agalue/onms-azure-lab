@@ -1,0 +1,119 @@
+#cloud-config
+package_upgrade: false
+
+write_files:
+- owner: root:root
+  path: /opt/opennms/etc/featuresBoot.d/features.boot
+  content: |
+    opennms-kafka-producer
+
+- owner: root:root
+  path: /opt/opennms/etc/opennms.properties.d/rrd.properties
+  content: |
+    org.opennms.rrd.storeByGroup=true
+    org.opennms.rrd.storeByForeignSource=true
+    org.opennms.rrd.strategyClass=org.opennms.netmgt.rrd.rrdtool.MultithreadedJniRrdStrategy
+    org.opennms.rrd.interfaceJar=/usr/share/java/jrrd2.jar
+    opennms.library.jrrd2=/usr/lib64/libjrrd2.so
+
+# Kafka Sink and RPC API
+- owner: root:root
+  path: /opt/opennms/etc/opennms.properties.d/kafka.properties
+  content: |
+    # Disable internal ActiveMQ
+    org.opennms.activemq.broker.disable=true
+    # Sink
+    org.opennms.core.ipc.sink.strategy=kafka
+    org.opennms.core.ipc.sink.kafka.bootstrap.servers=${kafka_bootstrap}
+    org.opennms.core.ipc.sink.kafka.acks=1
+    # RPC
+    org.opennms.core.ipc.rpc.strategy=kafka
+    org.opennms.core.ipc.rpc.kafka.bootstrap.servers=${kafka_bootstrap}
+    org.opennms.core.ipc.rpc.kafka.ttl=30000
+    org.opennms.core.ipc.rpc.kafka.single-topic=true
+    org.opennms.core.ipc.rpc.kafka.auto.offset.reset=latest
+
+# OpenNMS Kafka Producer Client
+- owner: root:root
+  path: /opt/opennms/etc/org.opennms.features.kafka.producer.client.cfg
+  content: |
+    bootstrap.servers=${kafka_bootstrap}
+    compression.type=gzip
+    timeout.ms=30000
+    max.request.size=5000000
+
+# OpenNMS Kafka Producer Settings
+- owner: root:root
+  path: /opt/opennms/etc/org.opennms.features.kafka.producer.cfg
+  content: |
+    topologyProtocols=bridge,cdp,isis,lldp,ospf
+    suppressIncrementalAlarms=true
+    forward.metrics=true
+    nodeRefreshTimeoutMs=300000
+    alarmSyncIntervalMs=300000
+    kafkaSendQueueCapacity=1000
+    nodeTopic=OpenNMS_nodes
+    alarmTopic=OpenNMS_alarms
+    eventTopic=OpenNMS_events
+    metricTopic=OpenNMS_metrics
+    alarmFeedbackTopic=OpenNMS_alarms_feedback
+    topologyVertexTopic=OpenNMS_topology_vertices
+    topologyEdgeTopic=OpenNMS_edges
+
+- owner: root:root
+  path: /opt/opennms/etc/org.opennms.features.flows.persistence.elastic.cfg
+  content: |
+    elasticUrl=${elastic_url}
+    globalElasticUser=elastic
+    globalElasticPassword=elastic
+    connTimeout=30000
+    readTimeout=300000
+    retries=1
+    elasticIndexStrategy=daily
+    # The following settings should be consistent with your ES cluster
+    settings.index.number_of_shards=1
+    settings.index.number_of_replicas=0
+
+- owner: root:root
+  permissions: '0400'
+  path: /etc/snmp/snmpd.conf
+  content: |
+    rocommunity public default
+    syslocation Azure - ${location}
+    syscontact ${user}
+    dontLogTCPWrappersConnects yes
+    disk /
+
+packages:
+- net-snmp
+- net-snmp-utils
+- epel-release
+- java-11-openjdk-devel
+- postgresql-server
+
+runcmd:
+- sysctl --system
+- systemctl enable --now snmpd
+
+# Install OpenNMS Horizon and Helm
+- dnf install -y https://yum.opennms.org/repofiles/opennms-repo-stable-rhel8.noarch.rpm
+- dnf install -y  jrrd2 opennms-core opennms-webapp-jetty opennms-webapp-hawtio opennms-helm 
+
+# Install and enable Haveged
+- dnf install -y haveged
+- systemctl --now enable haveged
+
+# Configure and start PostgreSQL
+- /usr/bin/postgresql-setup --initdb --unit postgresql
+- sed -r -i "/^(local|host)/s/(peer|ident)/trust/g" /var/lib/pgsql/data/pg_hba.conf
+- systemctl --now enable postgresql
+
+# Configure and start OpenNMS
+- echo 'JAVA_HEAP_SIZE=${heap_size}' > /opt/opennms/etc/opennms.conf
+- sed -r -i 's/enabled="false"/enabled="true"/' /opt/opennms/etc/telemetryd-configuration.xml
+- /opt/opennms/bin/runjava -s
+- /opt/opennms/bin/install -dis
+- systemctl --now enable opennms
+
+# Configure and start Grafana
+- systemctl --now enable grafana-server

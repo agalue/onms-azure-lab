@@ -1,0 +1,93 @@
+#cloud-config
+package_upgrade: false
+
+yum_repos:
+  elasticsearch:
+    name: Elasticsearch repository for 7.x packages
+    baseurl: https://artifacts.elastic.co/packages/7.x/yum
+    enabled: true
+    gpgcheck: true
+    gpgkey: https://artifacts.elastic.co/GPG-KEY-elasticsearch
+
+write_files:
+- owner: root:root
+  path: /etc/sysctl.d/99-elastic.conf
+  content: |
+    net.ipv4.tcp_keepalive_time=60
+    net.ipv4.tcp_keepalive_probes=3
+    net.ipv4.tcp_keepalive_intvl=10
+    net.core.rmem_max=16777216
+    net.core.wmem_max=16777216
+    net.core.rmem_default=16777216
+    net.core.wmem_default=16777216
+    net.core.optmem_max=40960
+    net.ipv4.tcp_rmem=4096 87380 16777216
+    net.ipv4.tcp_wmem=4096 65536 16777216
+    net.ipv4.tcp_window_scaling=1
+    net.core.netdev_max_backlog=2500
+    net.core.somaxconn=65000
+    vm.swappiness=1
+    vm.zone_reclaim_mode=0
+    vm.max_map_count=1048575
+
+- owner: root:root
+  permissions: '0400'
+  path: /etc/snmp/snmpd.conf
+  content: |
+    rocommunity public default
+    syslocation Azure - ${location}
+    syscontact ${user}
+    dontLogTCPWrappersConnects yes
+    disk /
+
+- owner: root:root
+  path: /etc/systemd/system/elasticsearch.service.d/override.conf
+  content: |
+    [Service]
+    LimitMEMLOCK=infinity
+
+- owner: root:root
+  permissions: '0755'
+  path: /etc/elasticsearch/configure.sh
+  content: |
+    #!/bin/bash
+    ipaddress=$(ifconfig eth0 | grep 'inet[^6]' | awk '{print $2}')
+    # Install required OpenNMS Drift Plugin (matching the chosen Elasticsearch version)
+    plugin_url=https://github.com/OpenNMS/elasticsearch-drift-plugin/releases/download/v${version}/elasticsearch-drift-plugin-${version}.zip
+    /usr/share/elasticsearch/bin/elasticsearch-plugin install -b $plugin_url
+    # Configure Elasticsearch
+    cat <<EOF >>/etc/elasticsearch/elasticsearch.yml
+    cluster.name: OpenNMS
+    node.name: $(hostname)
+    network.host: $ipaddress
+    xpack.monitoring.collection.enabled: true
+    bootstrap.memory_lock: true
+    search.max_buckets: 50000
+    discovery.type: single-node
+    EOF
+    sed -i -r "s/^(-Xm[xs])1g/\1${heap_size}m/" /etc/elasticsearch/jvm.options
+    # Configure Kibana
+    cat <<EOF >>/etc/kibana/kibana.yml
+    server.host: $ipaddress
+    server.name: $(hostname)
+    elasticsearch.hosts: ["http://$(hostname):9200"]
+    EOF
+
+packages:
+- net-snmp
+- net-snmp-utils
+- epel-release
+- java-11-openjdk-devel
+- elasticsearch-${version}
+- kibana-${version}
+
+bootcmd:
+- rpm --import https://artifacts.elastic.co/GPG-KEY-elasticsearch
+
+runcmd:
+- sysctl --system
+- /etc/elasticsearch/configure.sh
+- systemctl --now enable elasticsearch
+- systemctl --now enable kibana
+- systemctl --now enable snmpd
+

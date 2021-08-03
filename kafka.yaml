@@ -1,0 +1,150 @@
+#cloud-config
+package_upgrade: false
+
+yum_repos:
+  docker:
+    name: Docker CE Stable - $basearch
+    baseurl: https://download.docker.com/linux/centos/$releasever/$basearch/stable
+    enabled: true
+    gpgcheck: true
+    gpgkey: https://download.docker.com/linux/centos/gpg
+
+write_files:
+- owner: root:root
+  path: /etc/security/limits.d/kafka.conf
+  content: |
+    * soft nofile 100000
+    * hard nofile 100000
+
+- owner: root:root
+  path: /etc/sysctl.d/99-kafka.conf
+  content: |
+    net.ipv4.tcp_keepalive_time=60
+    net.ipv4.tcp_keepalive_probes=3
+    net.ipv4.tcp_keepalive_intvl=10
+    net.core.rmem_max=16777216
+    net.core.wmem_max=16777216
+    net.core.rmem_default=16777216
+    net.core.wmem_default=16777216
+    net.core.optmem_max=40960
+    net.ipv4.tcp_rmem=4096 87380 16777216
+    net.ipv4.tcp_wmem=4096 65536 16777216
+    net.ipv4.tcp_window_scaling=1
+    net.core.netdev_max_backlog=2500
+    net.core.somaxconn=65000
+    vm.swappiness=1
+    vm.zone_reclaim_mode=0
+    vm.max_map_count=1048575
+
+- owner: root:root
+  permissions: '0400'
+  path: /etc/snmp/snmpd.conf
+  content: |
+    rocommunity public default
+    syslocation Azure - ${location}
+    syscontact ${user}
+    dontLogTCPWrappersConnects yes
+    disk /
+
+- owner: root:root
+  path: /etc/systemd/system/zookeeper.service
+  content: |
+    [Unit]
+    Description=Apache Zookeeper server
+    Documentation=http://zookeeper.apache.org
+    Wants=network-online.target
+    After=network-online.target
+    [Service]
+    Type=simple
+    User=root
+    Group=root
+    Environment="KAFKA_HEAP_OPTS=-Xmx${zk_heap_size}m -Xms${zk_heap_size}m"
+    ExecStart=/opt/kafka/bin/zookeeper-server-start.sh /opt/kafka/config/zookeeper.properties
+    ExecStop=/opt/kafka/bin/zookeeper-server-stop.sh
+    [Install]
+    WantedBy=multi-user.target
+
+- owner: root:root
+  path: /etc/systemd/system/kafka.service
+  content: |
+    [Unit]
+    Description=Apache Kafka Server
+    Documentation=http://kafka.apache.org
+    Wants=zookeeper.service
+    After=zookeeper.service network-online.target
+    [Service]
+    Type=simple
+    User=root
+    Group=root
+    LimitNOFILE=100000
+    Environment="KAFKA_HEAP_OPTS=-Xmx${kafka_heap_size}m -Xms${kafka_heap_size}m"
+    Environment="KAFKA_JMX_OPTS=-Dcom.sun.management.jmxremote=true -Dcom.sun.management.jmxremote.rmi.port=9999 -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Djava.rmi.server.hostname=%H -Djava.net.preferIPv4Stack=true"
+    Environment="JMX_PORT=9999"
+    ExecStart=/opt/kafka/bin/kafka-server-start.sh /opt/kafka/config/server.properties
+    ExecStop=/opt/kafka/bin/kafka-server-stop.sh
+    [Install]
+    WantedBy=multi-user.target
+
+- owner: root:root
+  path: /tmp/zookeeper.properties
+  content: |
+    dataDir=/data/zookeeper
+    tickTime=2000
+    clientPort=2181
+    initLimit=10
+    syncLimit=5
+
+- owner: root:root
+  path: /tmp/server.properties
+  content: |
+    broker.id=1
+    log.dirs=/data/kafka
+    log.retention.hours=168
+    log.segment.bytes=1073741824
+    zookeeper.connect=127.0.0.1:2181
+    zookeeper.connection.timeout.ms=30000
+    # Connection
+    advertised.listeners=INSIDE://:9092,OUTSIDE://${public_fqdn}:9094
+    listeners=INSIDE://:9092,OUTSIDE://:9094
+    listener.security.protocol.map=INSIDE:PLAINTEXT,OUTSIDE:PLAINTEXT
+    inter.broker.listener.name=INSIDE
+    # Replication
+    offsets.topic.replication.factor=1
+    default.replication.factor=1
+    min.insync.replicas=1
+    # Must be greater than number of Minions per Location
+    num.partitions=${kafka_partitions}
+    # Recommended for the OpenNMS Kafka Producer
+    message.max.bytes=5000000
+    replica.fetch.max.bytes=5000000
+    compression.type=producer
+    # Required for OpenNMS and Minions
+    auto.create.topics.enable=true
+    # Recommended to avoid disrupting messages workflow
+    delete.topic.enable=false
+
+packages:
+- net-snmp
+- net-snmp-utils
+- epel-release
+- java-11-openjdk-devel
+- docker-ce
+- docker-ce-cli
+- containerd.io
+
+runcmd:
+- sysctl --system
+- wget -O /tmp/kafka.tar.gz https://downloads.apache.org/kafka/2.8.0/kafka_2.13-2.8.0.tgz
+- cd /opt
+- mkdir kafka
+- tar -xvzf /tmp/kafka.tar.gz -C kafka --strip-components 1
+- mv -f /tmp/*.properties /opt/kafka/config/
+- mkdir -p /data/zookeeper /data/kafka
+- echo 1 > /data/zookeeper/myid
+- systemctl daemon-reload
+- systemctl --now enable zookeeper
+- systemctl --now enable kafka
+- systemctl --now enable snmpd
+- systemctl --now enable docker
+- usermod -aG docker ${user}
+- docker run --name cmak -d -e ZK_HOSTS="$(hostname):2181" -e APPLICATION_SECRET="opennms" -p 9000:9000 hlebalbau/kafka-manager:stable
