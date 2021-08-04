@@ -19,13 +19,13 @@ resource "azurerm_network_security_group" "opennms" {
   }
 
   security_rule {
-    name                       = "http"
+    name                       = "webui"
     priority                   = 101
     direction                  = "Inbound"
     access                     = "Allow"
     protocol                   = "Tcp"
     source_port_range          = "*"
-    destination_port_range     = "8980"
+    destination_port_range     = var.security.enabled ? "443" : "8980"
     source_address_prefix      = "*"
     destination_address_prefix = "*"
   }
@@ -38,6 +38,18 @@ resource "azurerm_network_security_group" "opennms" {
     protocol                   = "Tcp"
     source_port_range          = "*"
     destination_port_range     = "3000"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
+
+  security_rule {
+    name                       = "http" # For LetsEncrypt
+    priority                   = 103
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "80"
     source_address_prefix      = "*"
     destination_address_prefix = "*"
   }
@@ -75,9 +87,15 @@ data "template_file" "opennms" {
   template = file("opennms.yaml")
 
   vars = {
-    user            = var.username
-    location        = var.location
-    heap_size       = var.heap_size.opennms
+    user             = var.username
+    location         = var.location
+    email            = var.email
+    heap_size        = var.heap_size.opennms
+    security_enabled = var.security.enabled
+    kafka_user       = var.security.kafka_user
+    kafka_passwd     = var.security.kafka_passwd
+    public_fqdn      = "${local.onms_vm_name}.${var.location}.cloudapp.azure.com"
+
     # The following are defined this way to enforce the dependency against the external applications
     kafka_bootstrap = "${azurerm_linux_virtual_machine.kafka.name}:9092"
     elastic_url     = "http://${azurerm_linux_virtual_machine.elastic.name}:9200/"

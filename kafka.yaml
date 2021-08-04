@@ -123,6 +123,92 @@ write_files:
     # Recommended to avoid disrupting messages workflow
     delete.topic.enable=false
 
+- owner: root:root
+  permissions: '0755'
+  path: /tmp/enable-authentication.sh
+  content: |
+    #!/bin/bash
+    if [ "${security_enabled}" != "true" ]; then
+      echo "Security is not enabled"
+      exit
+    fi
+    /opt/kafka/bin/kafka-configs.sh --bootstrap-server $(hostname):9092 \
+      --alter \
+      --add-config "SCRAM-SHA-256=[password=${kafka_passwd}],SCRAM-SHA-512=[password=${kafka_passwd}]" \
+      --entity-type users \
+      --entity-name ${kafka_user}
+    cat <<EOF | sudo tee -a /opt/kafka/config/zookeeper.properties
+      authProvider.sasl=org.apache.zookeeper.server.auth.SASLAuthenticationProvider
+    EOF
+    sudo sed -i -r '/listener.security.protocol.map/d' /opt/kafka/config/server.properties
+    cat <<EOF | sudo tee -a /opt/kafka/config/server.properties
+    # Enable Security
+    zookeeper.set.acl=true
+    listener.security.protocol.map=INSIDE:SASL_PLAINTEXT,OUTSIDE:SASL_PLAINTEXT
+    sasl.mechanism.inter.broker.protocol=SCRAM-SHA-512
+    sasl.enabled.mechanisms=SCRAM-SHA-256,SCRAM-SHA-512
+    EOF
+    cat <<EOF | sudo tee /opt/kafka/config/zookeeper_jaas.conf
+    Server {
+      org.apache.zookeeper.server.auth.DigestLoginModule required
+      user_${zk_user}="${zk_passwd}";
+    };
+    EOF
+    sudo chown kafka:kafka /opt/kafka/config/zookeeper_jaas.conf
+    sudo chmod 0600 /opt/kafka/config/zookeeper_jaas.conf
+    cat <<EOF | sudo tee /opt/kafka/config/kafka_jaas.conf
+    KafkaServer {
+      org.apache.kafka.common.security.scram.ScramLoginModule required
+      username="${kafka_user}"
+      password="${kafka_passwd}";
+    };
+    Client {
+      org.apache.zookeeper.server.auth.DigestLoginModule required
+      username="${zk_user}"
+      password="${zk_passwd}";
+    };
+    EOF
+    sudo chown kafka:kafka /opt/kafka/config/kafka_jaas.conf
+    sudo chmod 0600 /opt/kafka/config/kafka_jaas.conf
+    OPTS='Environment="KAFKA_OPTS=-Djava.security.auth.login.config=/opt/kafka/config/zookeeper_jaas.conf"'
+    sudo sed -i -r -e "/^ExecStart=.*/i $OPTS" /etc/systemd/system/zookeeper.service
+    OPTS='Environment="KAFKA_OPTS=-Djava.security.auth.login.config=/opt/kafka/config/kafka_jaas.conf"'
+    sudo sed -i -r -e "/^ExecStart=.*/i $OPTS" /etc/systemd/system/kafka.service
+
+- owner: root:root
+  permissions: '0755'
+  path: /tmp/enable-encryption.sh
+  content: |
+    #!/bin/bash
+    if [ "${security_enabled}" != "true" ]; then
+      echo "Security is not enabled"
+      exit
+    fi
+    sudo dnf install -y certbot python3-certbot-nginx
+    sudo certbot certonly --standalone -d ${public_fqdn} --non-interactive --agree-tos -m ${email}
+    TEMP_P12="/tmp/ssl.p12.$(date +%s)"
+    TEMP_KEYSTORE="/tmp/ssl.keystore.$(date +%s)"
+    TARGET_KEYSTORE="/opt/kafka/config/letsencrypt.jks"
+    sudo openssl pkcs12 -export \
+      -in /etc/letsencrypt/live/${public_fqdn}/fullchain.pem \
+      -inkey /etc/letsencrypt/live/${public_fqdn}/privkey.pem \
+      -out $TEMP_P12 -name kafka -password pass:${jks_passwd}
+    sudo keytool -importkeystore -alias kafka \
+      -deststorepass ${jks_passwd} -destkeypass ${jks_passwd} -destkeystore $TEMP_KEYSTORE \
+      -srckeystore $TEMP_P12 -srcstoretype PKCS12 -srcstorepass ${jks_passwd}
+    sudo cp $TEMP_KEYSTORE $TARGET_KEYSTORE
+    sudo chmod 440 $TARGET_KEYSTORE
+    sudo chown kafka:kafka $TARGET_KEYSTORE
+    sudo rm -f $TEMP_P12 $TEMP_KEYSTORE
+    CONFIG="/opt/kafka/config/server.properties"
+    sudo sed -i -r '/listener.security.protocol.map/d' $CONFIG
+    cat <<EOF | sudo tee -a $CONFIG
+    listener.security.protocol.map=INSIDE:SASL_PLAINTEXT,OUTSIDE:SASL_SSL
+    ssl.keystore.location=$TARGET_KEYSTORE
+    ssl.keystore.password=${jks_passwd}
+    ssl.key.password=${jks_passwd}
+    EOF
+
 packages:
 - net-snmp
 - net-snmp-utils
@@ -141,6 +227,8 @@ runcmd:
 - mv -f /tmp/*.properties /opt/kafka/config/
 - mkdir -p /data/zookeeper /data/kafka
 - echo 1 > /data/zookeeper/myid
+- /tmp/enable-authentication.sh
+- /tmp/enable-encryption.sh
 - systemctl daemon-reload
 - systemctl --now enable zookeeper
 - systemctl --now enable kafka

@@ -10,6 +10,11 @@ variable "password" {
   type        = string
 }
 
+variable "email" {
+  description = "Email address to use with LetsEncrypt for TLS; used only when security.enabled=true"
+  type        = string
+}
+
 variable "location" {
   description = "Azure Location/Region"
   type        = string
@@ -87,6 +92,26 @@ variable "heap_size" {
     zookeeper     = "2048"
     kafka         = "2048"
     elasticsearch = "4096"
+  }
+}
+
+variable "security" {
+  description = "Credentials to access servers"
+  type = object({
+    enabled      = bool
+    zk_user      = string
+    zk_passwd    = string
+    kafka_user   = string
+    kafka_passwd = string
+    jks_passwd   = string
+  })
+  default = {
+    enabled      = false
+    zk_user      = "zkonms"
+    zk_passwd    = "zk0p3nNM5;"
+    kafka_user   = "opennms"
+    kafka_passwd = "0p3nNM5;"
+    jks_passwd   = "jks0p3nNM5;"
   }
 }
 

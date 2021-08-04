@@ -42,7 +42,10 @@ terraform init
 * Create the resources in Azure
 
 ```bash
-terraform apply -var "username=agalue" -var "password=1HateWind0ws;"
+terraform apply \
+  -var "username=agalue" \
+  -var "password=1HateWind0ws;" \
+  -var "email=agalue@opennms.org"
 ```
 
 The above assumes there is already a resource group called `support-testing` created in Azure, on which Terraform will create all the resources.
@@ -53,9 +56,12 @@ If you want to create the resource group, you can run the following instead:
 terraform apply \
   -var "username=agalue" \
   -var "password=1HateWind0ws;" \
+  -var "email=agalue@opennms.org" \
   -var "resource_group_create=true" \
   -var "resource_group_name=OpenNMS"
 ```
+
+Additionally, if you want to enable SCRAM authentication for Kafka and TLS Encrytion via LetsEncrypt for OpenNMS and Kafka, add `-var "security.enabled=true"` to the list of variables.
 
 All the resources will be prefixed by the content of the `username` variable for their names.
 
