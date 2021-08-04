@@ -77,10 +77,15 @@ export azure_location="eastus"
 export minion_id="minion01"
 export minion_location="Apex"
 export minion_heap="1g"
+export security_enabled="false"
+export kafka_user="opennms"
+export kafka_passwd="0p3nNM5;"
 
 envsubst < minion-template.yaml > /tmp/$minion_id.yaml
 multipass launch -m 2G -n $minion_id --cloud-init /tmp/$minion_id.yaml
 ```
+
+> Make sure to use use the appropriate `security_enabled` based on how you started the lab, and the credentials are correct (check `vars.tf`).
 
 The template assumes you haven't changed the `locals` entry inside `vars.tf`.
 
