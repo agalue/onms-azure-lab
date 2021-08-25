@@ -78,6 +78,8 @@ data "template_file" "opennms" {
     user            = var.username
     location        = var.location
     heap_size       = var.heap_size.opennms
+    onms_repo       = var.onms_repo
+    onms_version    = var.onms_version
     # The following are defined this way to enforce the dependency against the external applications
     kafka_bootstrap = "${azurerm_linux_virtual_machine.kafka.name}:9092"
     elastic_url     = "http://${azurerm_linux_virtual_machine.elastic.name}:9200/"

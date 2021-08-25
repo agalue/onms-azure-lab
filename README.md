@@ -63,6 +63,8 @@ The provided credentials will give you SSH access to all the machines, and remem
 
 The chosen `password` for authentication must follow the Azure guidelines; otherwise, the resource creation will fail. Fortunately, you can re-apply the changes with the correct one on the next attempt.
 
+If you want to install a specific version of OpenNMS, you should provide a value for the variable `onms_repo` (defaults to `stable`) and `onms_version` (defaults to `latest`). The values for `onms_repo` can only be `stable`, `oldstable`, `obsolete`, or `bleeding`. The version must be either `latest` or a specific number following RPM convention, for instance, `27.2.0-1`.
+
 For testing purposes, this repository provides a `cloud-init` YAML file for Minion, you can use with [multipass](https://multipass.run/). It contains some templating variables you can replace using [envsubst](https://www.gnu.org/software/gettext/manual/html_node/envsubst-Invocation.html); for instance:
 
 ```bash

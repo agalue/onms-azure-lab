@@ -75,6 +75,26 @@ write_files:
     settings.index.number_of_replicas=0
 
 - owner: root:root
+  permissions: '0755'
+  path: /opt/opennms/bin/setup.sh
+  content: |
+    #!/bin/bash
+    if rpm -qa | grep -q opennms-core; then
+      echo "OpenNMS is already installed."
+      exit
+    fi
+    echo "Installing OpenNMS ${onms_repo} repository"
+    dnf install -y https://yum.opennms.org/repofiles/opennms-repo-${onms_repo}-rhel8.noarch.rpm
+    suffix=""
+    if [ "${onms_version}" != "latest" ]; then
+      suffix="-${onms_version}"
+      echo "Installing OpenNMS version ${onms_version}"
+    else
+      echo "Installing the latest version of OpenNMS"
+    fi
+    dnf install -y jrrd2 opennms-core$suffix opennms-webapp-jetty$suffix opennms-webapp-hawtio$suffix opennms-helm
+
+- owner: root:root
   permissions: '0400'
   path: /etc/snmp/snmpd.conf
   content: |
@@ -95,10 +115,6 @@ runcmd:
 - sysctl --system
 - systemctl enable --now snmpd
 
-# Install OpenNMS Horizon and Helm
-- dnf install -y https://yum.opennms.org/repofiles/opennms-repo-stable-rhel8.noarch.rpm
-- dnf install -y  jrrd2 opennms-core opennms-webapp-jetty opennms-webapp-hawtio opennms-helm 
-
 # Install and enable Haveged
 - dnf install -y haveged
 - systemctl --now enable haveged
@@ -107,6 +123,9 @@ runcmd:
 - /usr/bin/postgresql-setup --initdb --unit postgresql
 - sed -r -i "/^(local|host)/s/(peer|ident)/trust/g" /var/lib/pgsql/data/pg_hba.conf
 - systemctl --now enable postgresql
+
+# Install OpenNMS Horizon and Helm
+- /opt/opennms/bin/setup.sh
 
 # Configure and start OpenNMS
 - echo 'JAVA_HEAP_SIZE=${heap_size}' > /opt/opennms/etc/opennms.conf
