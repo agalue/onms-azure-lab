@@ -90,6 +90,8 @@ data "template_file" "opennms" {
     user             = var.username
     location         = var.location
     email            = var.email
+    onms_repo        = var.onms_repo
+    onms_version     = var.onms_version
     heap_size        = var.heap_size.opennms
     security_enabled = var.security.enabled
     kafka_user       = var.security.kafka_user

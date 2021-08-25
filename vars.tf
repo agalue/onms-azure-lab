@@ -8,6 +8,7 @@ variable "username" {
 variable "password" {
   description = "Password to access the VMs for the chosen user"
   type        = string
+  sensitive   = true
 }
 
 variable "email" {
@@ -82,16 +83,36 @@ variable "vm_size" {
 variable "heap_size" {
   description = "Java Heap Memory Size all Applications expressed in MB"
   type = object({
-    opennms       = string
-    zookeeper     = string
-    kafka         = string
-    elasticsearch = string
+    opennms       = number
+    zookeeper     = number
+    kafka         = number
+    elasticsearch = number
   })
   default = {
-    opennms       = "4096"
-    zookeeper     = "2048"
-    kafka         = "2048"
-    elasticsearch = "4096"
+    opennms       = 4096
+    zookeeper     = 2048
+    kafka         = 2048
+    elasticsearch = 4096
+  }
+}
+
+variable "onms_repo" {
+  description = "The name of the OpenNMS YUM repository: stable, oldstable, obsolete, bleeding"
+  type        = string
+  default     = "stable"
+  validation {
+    condition = can(regex("^(stable|oldstable|obsolete|bleeding)$", var.onms_repo))
+    error_message = "The onms_repo can only be stable, oldstable, obsolete, or bleeding."
+  }
+}
+
+variable "onms_version" {
+  description = "The OpenNMS version to install; for instance 28.0.2-1 or 'latest'"
+  type        = string
+  default     = "latest"
+  validation {
+    condition = can(regex("^(latest|\\d+\\.\\d+\\.\\d+-\\d+)$", var.onms_version))
+    error_message = "The onms_version must follow RPM convention, for instance, 28.0.2-1; or 'latest'."
   }
 }
 
