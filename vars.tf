@@ -1,7 +1,13 @@
 # Author: Alejandro Galue <agalue@opennms.org>
 
+variable "name_prefix" {
+  description = "A prefix to add to all Azure resources, to make them unique."
+  type        = string
+  default     = "agalue"
+}
+
 variable "username" {
-  description = "Username to access the VMs and uniquely identify all Azure resources"
+  description = "The user to access VMs and name prefix for Azure resources."
   type        = string
 }
 
@@ -46,7 +52,7 @@ variable "os_image" {
   default = {
     publisher = "OpenLogic"
     offer     = "CentOS"
-    sku       = "8_3"
+    sku       = "8_4"
     version   = "latest"
   }
 }
@@ -101,8 +107,8 @@ variable "onms_repo" {
   type        = string
   default     = "stable"
   validation {
-    condition = can(regex("^(stable|oldstable|obsolete|bleeding)$", var.onms_repo))
-    error_message = "The onms_repo can only be stable, oldstable, obsolete, or bleeding."
+    condition = can(regex("^(stable|oldstable|obsolete)$", var.onms_repo))
+    error_message = "The onms_repo can only be stable, oldstable, or obsolete."
   }
 }
 
@@ -142,7 +148,7 @@ locals {
     Department   = "Support"
     Owner        = var.username
   }
-  onms_vm_name = "${var.username}-onms"
-  kafka_vm_name = "${var.username}-kafka"
-  elastic_vm_name = "${var.username}-elastic"
+  onms_vm_name = "${var.name_prefix}-onms"
+  kafka_vm_name = "${var.name_prefix}-kafka"
+  elastic_vm_name = "${var.name_prefix}-elastic"
 }

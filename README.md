@@ -45,6 +45,7 @@ terraform init
 
 ```bash
 terraform apply \
+  -var "name_prefix=ag-lab1" \
   -var "username=agalue" \
   -var "password=1HateWind0ws;" \
   -var "email=agalue@opennms.org"
@@ -56,6 +57,7 @@ If you want to create the resource group, you can run the following instead:
 
 ```bash
 terraform apply \
+  -var "name_prefix=ag-lab1" \
   -var "username=agalue" \
   -var "password=1HateWind0ws;" \
   -var "email=agalue@opennms.org" \
@@ -98,15 +100,9 @@ The template assumes you haven't changed the `locals` entry inside `vars.tf`.
 To destroy all the resources, you should execute the `terraform destroy` command with the same variables you used when executed `terraform apply`, for instance:
 
 ```bash
-terraform destroy -var "username=agalue" -var "password=1HateWind0ws;"
-```
-
-Or,
-
-```bash
-terraform destroy \
+terraform destroy  \
+  -var "name_prefix=ag-lab1" \
   -var "username=agalue" \
   -var "password=1HateWind0ws;" \
-  -var "resource_group_create=true" \
-  -var "resource_group_name=OpenNMS"
+  -var "email=agalue@opennms.org"
 ```
