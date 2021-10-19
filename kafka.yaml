@@ -143,7 +143,6 @@ write_files:
     sudo sed -i -r '/listener.security.protocol.map/d' /opt/kafka/config/server.properties
     cat <<EOF | sudo tee -a /opt/kafka/config/server.properties
     # Enable Security
-    zookeeper.set.acl=true
     listener.security.protocol.map=INSIDE:SASL_PLAINTEXT,OUTSIDE:SASL_PLAINTEXT
     sasl.mechanism.inter.broker.protocol=SCRAM-SHA-512
     sasl.enabled.mechanisms=SCRAM-SHA-256,SCRAM-SHA-512
@@ -220,7 +219,7 @@ packages:
 
 runcmd:
 - sysctl --system
-- wget -O /tmp/kafka.tar.gz https://downloads.apache.org/kafka/2.8.0/kafka_2.13-2.8.0.tgz
+- wget -O /tmp/kafka.tar.gz https://downloads.apache.org/kafka/2.8.1/kafka_2.13-2.8.1.tgz
 - cd /opt
 - mkdir kafka
 - tar -xvzf /tmp/kafka.tar.gz -C kafka --strip-components 1

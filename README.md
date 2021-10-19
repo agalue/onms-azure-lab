@@ -9,7 +9,7 @@ This is a simple test environment running in Azure made with [Terraform](https:/
   - RRDtool for metrics with `storeByGroup` and `storeByForeignSource` enabled
 - A VM with Elasticsearch 7.6.2 and Kibana 7.6.2 for Flow Processing
   - OpenNMS Drift Plugin installed
-- A VM with Zookeeper 3.5, Kafka 2.8.0, and CMAK (started via Docker).
+- A VM with Zookeeper 3.5, Kafka 2.8.1, and CMAK (started via Docker).
 
 All VMs are based on CentOS 8 and will be initialized via [cloud-init](https://cloudinit.readthedocs.io/en/latest/) scripts modified at runtime by Terraform based on the chosen variables.
 
