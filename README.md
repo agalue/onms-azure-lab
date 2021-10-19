@@ -78,22 +78,20 @@ If you want to install a specific version of OpenNMS, you should provide a value
 For testing purposes, this repository provides a `cloud-init` YAML file for Minion, you can use with [multipass](https://multipass.run/). It contains some templating variables you can replace using [envsubst](https://www.gnu.org/software/gettext/manual/html_node/envsubst-Invocation.html); for instance:
 
 ```bash
-export user="agalue"
-export azure_location="eastus"
-export minion_id="minion01"
+export name_prefix="ag-lab1"    # Must match name_prefix in Terraform
+export azure_location="eastus"  # Must match location in Terraform
+export security_enabled="false" # Must match security.enabled in Terraform
+export kafka_user="opennms"     # Must match security.kafka_user in Terraform
+export kafka_passwd="0p3nNM5;"  # Must match security.kafka_passwd in Terraform
+export minion_heap="512m"       # Must be less than the value specified via -m in multipass
 export minion_location="Apex"
-export minion_heap="512m"
-export security_enabled="false"
-export kafka_user="opennms"
-export kafka_passwd="0p3nNM5;"
+export minion_id="ag-minion01"
 
 envsubst < minion-template.yaml > /tmp/$minion_id.yaml
 multipass launch -m 1G -n $minion_id --cloud-init /tmp/$minion_id.yaml
 ```
 
-> Make sure to use use the appropriate `security_enabled` based on how you started the lab, and the credentials are correct (check `vars.tf`).
-
-The template assumes you haven't changed the `locals` entry inside `vars.tf`.
+> Ensure the usage of the appropriate content based on how you started the lab.
 
 ## Destroy the lab
 

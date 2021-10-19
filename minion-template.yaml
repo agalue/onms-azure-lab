@@ -7,7 +7,7 @@ write_files:
     content: |
       location=${minion_location}
       id=${minion_id}
-      http-url=http://${user}-onms.${azure_location}.cloudapp.azure.com:8980/opennms
+      http-url=http://${name_prefix}-onms.${azure_location}.cloudapp.azure.com:8980/opennms
 
   - owner: root:root
     path: /etc/minion-overlay/featuresBoot.d/kafka.boot
@@ -21,12 +21,12 @@ write_files:
   - owner: root:root
     path: /etc/minion-overlay/org.opennms.core.ipc.sink.kafka.cfg
     content: |
-      bootstrap.servers=${user}-kafka.${azure_location}.cloudapp.azure.com:9094
+      bootstrap.servers=${name_prefix}-kafka.${azure_location}.cloudapp.azure.com:9094
 
   - owner: root:root
     path: /etc/minion-overlay/org.opennms.core.ipc.rpc.kafka.cfg
     content: |
-      bootstrap.servers=${user}-kafka.${azure_location}.cloudapp.azure.com:9094
+      bootstrap.servers=${name_prefix}-kafka.${azure_location}.cloudapp.azure.com:9094
       single-topic=true
 
   - owner: root:root
@@ -34,7 +34,7 @@ write_files:
     path: /tmp/enable-security.sh
     content: |
       #!/bin/bash
-      if [ "$security_enabled" != "true" ]; then
+      if [ "${security_enabled}" != "true" ]; then
         echo "Security is not enabled"
         exit
       fi
@@ -44,14 +44,12 @@ write_files:
       sasl.mechanism=SCRAM-SHA-512
       sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required username="$kafka_user" password="$kafka_passwd";
       EOF
-      done
       cat <<EOF | sudo tee -a /etc/minion-overlay/org.opennms.core.ipc.rpc.kafka.cfg
       # Security
       security.protocol=SASL_SSL
       sasl.mechanism=SCRAM-SHA-512
       sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required username="$kafka_user" password="$kafka_passwd";
       EOF
-      done
 
 apt:
   preserve_sources_list: true
