@@ -93,6 +93,8 @@ data "template_file" "kafka" {
     public_fqdn      = "${local.kafka_vm_name}.${var.location}.cloudapp.azure.com"
     security_enabled = var.security.enabled
     jks_passwd       = var.security.jks_passwd
+    cmak_user        = var.security.cmak_user
+    cmak_passwd      = var.security.cmak_passwd
     zk_heap_size     = var.heap_size.zookeeper
     zk_user          = var.security.zk_user
     zk_passwd        = var.security.zk_passwd

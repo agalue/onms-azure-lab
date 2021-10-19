@@ -130,6 +130,8 @@ variable "security" {
     kafka_user   = string
     kafka_passwd = string
     jks_passwd   = string
+    cmak_user    = string
+    cmak_passwd  = string
   })
   default = {
     enabled      = false
@@ -138,6 +140,8 @@ variable "security" {
     kafka_user   = "opennms"
     kafka_passwd = "0p3nNM5;"
     jks_passwd   = "jks0p3nNM5;"
+    cmak_user    = "opennms"
+    cmak_passwd  = "cmak0p3nNM5;"
   }
 }
 

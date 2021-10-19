@@ -20,7 +20,7 @@ All VMs will have the Net-SNMP agent configured and running.
 For instance, if `location=eastus` and `name_prefix=ag-lab1`, the FQDNs would be:
 
 * `ag-lab1-onms.eastus.cloudapp.opennms.com` (with `security.enabled=false` OpenNMS WebUI=8980 and Grafana=3000; with `security.enabled=true`, both available at 443 via Nginx, using `/opennms` for OpenNMS and `/grafana` for Grafana)
-* `ag-lab1-kafka.eastus.cloudapp.opennms.com` (Client=9094)
+* `ag-lab1-kafka.eastus.cloudapp.opennms.com` (Client=9094, CMAK=9000)
 * `ag-lab1-elastic.eastus.cloudapp.opennms.com` (Kibana=5601)
 
 All instances have SSH access.

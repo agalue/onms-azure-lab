@@ -234,4 +234,4 @@ runcmd:
 - systemctl --now enable snmpd
 - systemctl --now enable docker
 - usermod -aG docker ${user}
-- docker run --name cmak -d -e ZK_HOSTS="$(hostname):2181" -e APPLICATION_SECRET="opennms" -p 9000:9000 hlebalbau/kafka-manager:stable
+- docker run --name cmak -d -e ZK_HOSTS="$(hostname):2181" -e KAFKA_MANAGER_AUTH_ENABLED="true" -e KAFKA_MANAGER_USERNAME="${cmak_user}" -e KAFKA_MANAGER_PASSWORD="${cmak_passwd}" -e APPLICATION_SECRET="${cmak_passwd}" -p 9000:9000 hlebalbau/kafka-manager:stable
