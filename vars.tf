@@ -79,9 +79,9 @@ variable "vm_size" {
     elasticsearch = string
   })
   default = {
-    opennms       = "Standard_DS3_v2"
-    kafka         = "Standard_DS3_v2"
-    elasticsearch = "Standard_DS3_v2"
+    opennms       = "Standard_D2s_v3"
+    kafka         = "Standard_D2s_v3"
+    elasticsearch = "Standard_D2s_v3"
   }
 }
 
