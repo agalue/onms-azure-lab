@@ -53,19 +53,34 @@ terraform apply \
 
 The above assumes there is already a resource group called `support-testing` created in Azure, on which Terraform will create all the resources.
 
-If you want to create the resource group, you can run the following instead:
+If you want to create the resource group, enable security and change other settings, we recommend to use a `.tfvars` file, for instance:
 
 ```bash
-terraform apply \
-  -var "name_prefix=ag-lab1" \
-  -var "username=agalue" \
-  -var "password=1HateWind0ws;" \
-  -var "email=agalue@opennms.org" \
-  -var "resource_group.create=true" \
-  -var "resource_group.name=OpenNMS"
+cat <<EOF > custom.tfvars
+name_prefix = "ag-lab1"
+username = "agalue"
+password = "1HateWind0ws;"
+email = "agalue@opennms.org"
+resource_group = {
+  create = true
+  name   = "OpenNMS"
+}
+security = {
+  enabled      = true
+  zk_user      = "zkonms"
+  zk_passwd    = "zk0p3nNM5;"
+  kafka_user   = "opennms"
+  kafka_passwd = "0p3nNM5;"
+  jks_passwd   = "jks0p3nNM5;"
+  cmak_user    = "opennms"
+  cmak_passwd  = "cmak0p3nNM5;"
+}
+EOF
+
+terraform apply -var-file="custom.tfvars"
 ```
 
-Additionally, if you want to enable SCRAM authentication for Kafka and TLS Encrytion via LetsEncrypt for OpenNMS and Kafka, add `-var "security.enabled=true"` to the list of variables.
+When enabling security, the `cloud-init` scripts will enable SCRAM authentication for Kafka and TLS Encryption via LetsEncrypt for OpenNMS/Grafana via Nginx and Kafka.
 
 All the resources will be prefixed by the content of the `name_prefix` variable for their names.
 
@@ -95,12 +110,4 @@ multipass launch -m 1G -n $minion_id --cloud-init /tmp/$minion_id.yaml
 
 ## Destroy the lab
 
-To destroy all the resources, you should execute the `terraform destroy` command with the same variables you used when executed `terraform apply`, for instance:
-
-```bash
-terraform destroy  \
-  -var "name_prefix=ag-lab1" \
-  -var "username=agalue" \
-  -var "password=1HateWind0ws;" \
-  -var "email=agalue@opennms.org"
-```
+To destroy all the resources, you should execute the `terraform destroy` command with the same variables you used when executed `terraform apply`.
