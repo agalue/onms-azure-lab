@@ -3,7 +3,7 @@
 resource "azurerm_network_security_group" "kafka" {
   name                = "${local.kafka_vm_name}-sg"
   location            = var.location
-  resource_group_name = var.resource_group_name
+  resource_group_name = var.resource_group.name
   tags                = local.custom_tags
 
   security_rule {
@@ -58,7 +58,7 @@ resource "azurerm_network_security_group" "kafka" {
 resource "azurerm_public_ip" "kafka" {
   name                = "${local.kafka_vm_name}-ip"
   location            = var.location
-  resource_group_name = var.resource_group_name
+  resource_group_name = var.resource_group.name
   tags                = local.custom_tags
   allocation_method   = "Dynamic"
   domain_name_label   = local.kafka_vm_name
@@ -67,7 +67,7 @@ resource "azurerm_public_ip" "kafka" {
 resource "azurerm_network_interface" "kafka" {
   name                = "${local.kafka_vm_name}-nic"
   location            = var.location
-  resource_group_name = var.resource_group_name
+  resource_group_name = var.resource_group.name
   tags                = local.custom_tags
 
   ip_configuration {
@@ -105,7 +105,7 @@ data "template_file" "kafka" {
 
 resource "azurerm_linux_virtual_machine" "kafka" {
   name                = local.kafka_vm_name
-  resource_group_name = var.resource_group_name
+  resource_group_name = var.resource_group.name
   location            = var.location
   size                = var.vm_size.kafka
   admin_username      = var.username

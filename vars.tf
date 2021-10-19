@@ -3,7 +3,7 @@
 variable "name_prefix" {
   description = "A prefix to add to all Azure resources, to make them unique."
   type        = string
-  default     = "agalue"
+  default     = "ag-lab1"
 }
 
 variable "username" {
@@ -28,16 +28,16 @@ variable "location" {
   default     = "eastus"
 }
 
-variable "resource_group_create" {
-  description = "Set to true to create the resource group (false to reuse an existing one)"
-  type        = bool
-  default     = false
-}
-
-variable "resource_group_name" {
-  description = "Name of the resource group"
-  type        = string
-  default     = "support-testing"
+variable "resource_group" {
+  description = "Azure resource group"
+  type        = object({
+    create = bool
+    name   = string
+  })
+  default = {
+    create = false
+    name = "support-testing"
+  }
 }
 
 # Must be consistent with the chosen Location/Region
@@ -57,7 +57,6 @@ variable "os_image" {
   }
 }
 
-# Used only when resource_group_create=true
 variable "address_space" {
   description = "Virtual Network Address Space"
   type        = string
@@ -80,9 +79,9 @@ variable "vm_size" {
     elasticsearch = string
   })
   default = {
-    opennms       = "Standard_DS4_v2"
-    kafka         = "Standard_DS4_v2"
-    elasticsearch = "Standard_DS4_v2"
+    opennms       = "Standard_DS3_v2"
+    kafka         = "Standard_DS3_v2"
+    elasticsearch = "Standard_DS3_v2"
   }
 }
 
@@ -148,6 +147,7 @@ locals {
     Department   = "Support"
     Owner        = var.username
   }
+  vnet_name = "${var.name_prefix}-vnet"
   onms_vm_name = "${var.name_prefix}-onms"
   kafka_vm_name = "${var.name_prefix}-kafka"
   elastic_vm_name = "${var.name_prefix}-elastic"

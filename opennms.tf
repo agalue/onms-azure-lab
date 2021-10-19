@@ -3,7 +3,7 @@
 resource "azurerm_network_security_group" "opennms" {
   name                = "${local.onms_vm_name}-sg"
   location            = var.location
-  resource_group_name = var.resource_group_name
+  resource_group_name = var.resource_group.name
   tags                = local.custom_tags
 
   security_rule {
@@ -58,7 +58,7 @@ resource "azurerm_network_security_group" "opennms" {
 resource "azurerm_public_ip" "opennms" {
   name                = "${local.onms_vm_name}-ip"
   location            = var.location
-  resource_group_name = var.resource_group_name
+  resource_group_name = var.resource_group.name
   tags                = local.custom_tags
   allocation_method   = "Dynamic"
   domain_name_label   = local.onms_vm_name
@@ -67,7 +67,7 @@ resource "azurerm_public_ip" "opennms" {
 resource "azurerm_network_interface" "opennms" {
   name                = "${local.onms_vm_name}-nic"
   location            = var.location
-  resource_group_name = var.resource_group_name
+  resource_group_name = var.resource_group.name
   tags                = local.custom_tags
 
   ip_configuration {
@@ -106,7 +106,7 @@ data "template_file" "opennms" {
 
 resource "azurerm_linux_virtual_machine" "opennms" {
   name                = local.onms_vm_name
-  resource_group_name = var.resource_group_name
+  resource_group_name = var.resource_group.name
   location            = var.location
   size                = var.vm_size.opennms
   admin_username      = var.username

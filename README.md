@@ -17,11 +17,11 @@ All VMs will have valid FQDN in the `cloudapp.azure.com` domain to facilitate co
 
 All VMs will have the Net-SNMP agent configured and running.
 
-For instance, if `location=eastus` and `username=agalue`, the FQDNs would be:
+For instance, if `location=eastus` and `name_prefix=ag-lab1`, the FQDNs would be:
 
-* `agalue-onms.eastus.cloudapp.opennms.com` (with `security.enabled=false` OpenNMS WebUI=8980 and Grafana=3000; with `security.enabled=true`, both available at 443 (use `/grafana` for Grafana)
-* `agalue-kafka.eastus.cloudapp.opennms.com` (Client=9094)
-* `agalue-elastic.eastus.cloudapp.opennms.com` (Kibana=5601)
+* `ag-lab1-onms.eastus.cloudapp.opennms.com` (with `security.enabled=false` OpenNMS WebUI=8980 and Grafana=3000; with `security.enabled=true`, both available at 443 via Nginx, using `/opennms` for OpenNMS and `/grafana` for Grafana)
+* `ag-lab1-kafka.eastus.cloudapp.opennms.com` (Client=9094)
+* `ag-lab1-elastic.eastus.cloudapp.opennms.com` (Kibana=5601)
 
 All instances have SSH access.
 
@@ -61,13 +61,13 @@ terraform apply \
   -var "username=agalue" \
   -var "password=1HateWind0ws;" \
   -var "email=agalue@opennms.org" \
-  -var "resource_group_create=true" \
-  -var "resource_group_name=OpenNMS"
+  -var "resource_group.create=true" \
+  -var "resource_group.name=OpenNMS"
 ```
 
 Additionally, if you want to enable SCRAM authentication for Kafka and TLS Encrytion via LetsEncrypt for OpenNMS and Kafka, add `-var "security.enabled=true"` to the list of variables.
 
-All the resources will be prefixed by the content of the `username` variable for their names.
+All the resources will be prefixed by the content of the `name_prefix` variable for their names.
 
 The provided credentials will give you SSH access to all the machines, and remember that you can use the generated FQDNs (as all the IP addresses, public and private, are dynamic).
 
@@ -82,13 +82,13 @@ export user="agalue"
 export azure_location="eastus"
 export minion_id="minion01"
 export minion_location="Apex"
-export minion_heap="1g"
+export minion_heap="512m"
 export security_enabled="false"
 export kafka_user="opennms"
 export kafka_passwd="0p3nNM5;"
 
 envsubst < minion-template.yaml > /tmp/$minion_id.yaml
-multipass launch -m 2G -n $minion_id --cloud-init /tmp/$minion_id.yaml
+multipass launch -m 1G -n $minion_id --cloud-init /tmp/$minion_id.yaml
 ```
 
 > Make sure to use use the appropriate `security_enabled` based on how you started the lab, and the credentials are correct (check `vars.tf`).
