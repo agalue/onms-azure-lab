@@ -95,7 +95,7 @@ For testing purposes, this repository provides a `cloud-init` YAML file for Mini
 ```bash
 export name_prefix="ag-lab1"    # Must match name_prefix in Terraform
 export azure_location="eastus"  # Must match location in Terraform
-export security_enabled="false" # Must match security.enabled in Terraform
+export security_enabled="true"  # Must match security.enabled in Terraform
 export kafka_user="opennms"     # Must match security.kafka_user in Terraform
 export kafka_passwd="0p3nNM5;"  # Must match security.kafka_passwd in Terraform
 export minion_heap="512m"       # Must be less than the value specified via -m in multipass
