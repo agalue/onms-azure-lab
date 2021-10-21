@@ -50,6 +50,10 @@ write_files:
       sasl.mechanism=SCRAM-SHA-512
       sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required username="$kafka_user" password="$kafka_passwd";
       EOF
+      sudo sed -i -r "/http-url/d" /etc/minion/org.opennms.minion.controller.cfg
+      cat <<EOF | sudo tee -a etc/minion/org.opennms.minion.controller.cfg
+      http-url=https://${name_prefix}-onms.${azure_location}.cloudapp.azure.com/opennms
+      EOF
 
 apt:
   preserve_sources_list: true
