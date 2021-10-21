@@ -3,7 +3,7 @@
 resource "azurerm_network_security_group" "elastic" {
   name                = "${local.elastic_vm_name}-sg"
   location            = var.location
-  resource_group_name = var.resource_group_name
+  resource_group_name = var.resource_group.name
   tags                = local.custom_tags
 
   security_rule {
@@ -34,7 +34,7 @@ resource "azurerm_network_security_group" "elastic" {
 resource "azurerm_public_ip" "elastic" {
   name                = "${local.elastic_vm_name}-ip"
   location            = var.location
-  resource_group_name = var.resource_group_name
+  resource_group_name = var.resource_group.name
   tags                = local.custom_tags
   allocation_method   = "Dynamic"
   domain_name_label   = local.elastic_vm_name
@@ -43,7 +43,7 @@ resource "azurerm_public_ip" "elastic" {
 resource "azurerm_network_interface" "elastic" {
   name                = "${local.elastic_vm_name}-nic"
   location            = var.location
-  resource_group_name = var.resource_group_name
+  resource_group_name = var.resource_group.name
   tags                = local.custom_tags
 
   ip_configuration {
@@ -72,7 +72,7 @@ data "template_file" "elastic" {
 
 resource "azurerm_linux_virtual_machine" "elastic" {
   name                = local.elastic_vm_name
-  resource_group_name = var.resource_group_name
+  resource_group_name = var.resource_group.name
   location            = var.location
   size                = var.vm_size.elasticsearch
   admin_username      = var.username

@@ -1,7 +1,13 @@
 # Author: Alejandro Galue <agalue@opennms.org>
 
+variable "name_prefix" {
+  description = "A prefix to add to all Azure resources, to make them unique."
+  type        = string
+  default     = "ag-lab1"
+}
+
 variable "username" {
-  description = "Username to access the VMs and uniquely identify all Azure resources"
+  description = "The user to access VMs and name prefix for Azure resources."
   type        = string
 }
 
@@ -11,22 +17,27 @@ variable "password" {
   sensitive   = true
 }
 
+variable "email" {
+  description = "Email address to use with LetsEncrypt for TLS; used only when security.enabled=true"
+  type        = string
+}
+
 variable "location" {
   description = "Azure Location/Region"
   type        = string
   default     = "eastus"
 }
 
-variable "resource_group_create" {
-  description = "Set to true to create the resource group (false to reuse an existing one)"
-  type        = bool
-  default     = false
-}
-
-variable "resource_group_name" {
-  description = "Name of the resource group"
-  type        = string
-  default     = "support-testing"
+variable "resource_group" {
+  description = "Azure resource group"
+  type        = object({
+    create = bool
+    name   = string
+  })
+  default = {
+    create = false
+    name = "support-testing"
+  }
 }
 
 # Must be consistent with the chosen Location/Region
@@ -41,12 +52,11 @@ variable "os_image" {
   default = {
     publisher = "OpenLogic"
     offer     = "CentOS"
-    sku       = "8_3"
+    sku       = "8_4"
     version   = "latest"
   }
 }
 
-# Used only when resource_group_create=true
 variable "address_space" {
   description = "Virtual Network Address Space"
   type        = string
@@ -69,9 +79,9 @@ variable "vm_size" {
     elasticsearch = string
   })
   default = {
-    opennms       = "Standard_DS4_v2"
-    kafka         = "Standard_DS4_v2"
-    elasticsearch = "Standard_DS4_v2"
+    opennms       = "Standard_D2s_v3"
+    kafka         = "Standard_D2s_v3"
+    elasticsearch = "Standard_D2s_v3"
   }
 }
 
@@ -96,8 +106,8 @@ variable "onms_repo" {
   type        = string
   default     = "stable"
   validation {
-    condition = can(regex("^(stable|oldstable|obsolete|bleeding)$", var.onms_repo))
-    error_message = "The onms_repo can only be stable, oldstable, obsolete, or bleeding."
+    condition = can(regex("^(stable|oldstable|obsolete)$", var.onms_repo))
+    error_message = "The onms_repo can only be stable, oldstable, or obsolete."
   }
 }
 
@@ -111,13 +121,38 @@ variable "onms_version" {
   }
 }
 
+variable "security" {
+  description = "Credentials to access servers"
+  type = object({
+    enabled      = bool
+    zk_user      = string
+    zk_passwd    = string
+    kafka_user   = string
+    kafka_passwd = string
+    jks_passwd   = string
+    cmak_user    = string
+    cmak_passwd  = string
+  })
+  default = {
+    enabled      = false
+    zk_user      = "zkonms"
+    zk_passwd    = "zk0p3nNM5;"
+    kafka_user   = "opennms"
+    kafka_passwd = "0p3nNM5;"
+    jks_passwd   = "jks0p3nNM5;"
+    cmak_user    = "opennms"
+    cmak_passwd  = "cmak0p3nNM5;"
+  }
+}
+
 locals {
   custom_tags    = {
     Environment  = "Test"
     Department   = "Support"
     Owner        = var.username
   }
-  onms_vm_name = "${var.username}-onms"
-  kafka_vm_name = "${var.username}-kafka"
-  elastic_vm_name = "${var.username}-elastic"
+  vnet_name = "${var.name_prefix}-vnet"
+  onms_vm_name = "${var.name_prefix}-onms"
+  kafka_vm_name = "${var.name_prefix}-kafka"
+  elastic_vm_name = "${var.name_prefix}-elastic"
 }

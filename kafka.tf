@@ -3,7 +3,7 @@
 resource "azurerm_network_security_group" "kafka" {
   name                = "${local.kafka_vm_name}-sg"
   location            = var.location
-  resource_group_name = var.resource_group_name
+  resource_group_name = var.resource_group.name
   tags                = local.custom_tags
 
   security_rule {
@@ -19,7 +19,7 @@ resource "azurerm_network_security_group" "kafka" {
   }
 
   security_rule {
-    name                       = "client"
+    name                       = "client" # For external Minions
     priority                   = 101
     direction                  = "Inbound"
     access                     = "Allow"
@@ -31,7 +31,7 @@ resource "azurerm_network_security_group" "kafka" {
   }
 
   security_rule {
-    name                       = "cmak"
+    name                       = "cmak" # Kafka Manager
     priority                   = 102
     direction                  = "Inbound"
     access                     = "Allow"
@@ -41,12 +41,24 @@ resource "azurerm_network_security_group" "kafka" {
     source_address_prefix      = "*"
     destination_address_prefix = "*"
   }
+
+  security_rule {
+    name                       = "http" # For LetsEncrypt
+    priority                   = 103
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "80"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
 }
 
 resource "azurerm_public_ip" "kafka" {
   name                = "${local.kafka_vm_name}-ip"
   location            = var.location
-  resource_group_name = var.resource_group_name
+  resource_group_name = var.resource_group.name
   tags                = local.custom_tags
   allocation_method   = "Dynamic"
   domain_name_label   = local.kafka_vm_name
@@ -55,7 +67,7 @@ resource "azurerm_public_ip" "kafka" {
 resource "azurerm_network_interface" "kafka" {
   name                = "${local.kafka_vm_name}-nic"
   location            = var.location
-  resource_group_name = var.resource_group_name
+  resource_group_name = var.resource_group.name
   tags                = local.custom_tags
 
   ip_configuration {
@@ -77,8 +89,17 @@ data "template_file" "kafka" {
   vars = {
     user             = var.username
     location         = var.location
+    email            = var.email
     public_fqdn      = "${local.kafka_vm_name}.${var.location}.cloudapp.azure.com"
+    security_enabled = var.security.enabled
+    jks_passwd       = var.security.jks_passwd
+    cmak_user        = var.security.cmak_user
+    cmak_passwd      = var.security.cmak_passwd
     zk_heap_size     = var.heap_size.zookeeper
+    zk_user          = var.security.zk_user
+    zk_passwd        = var.security.zk_passwd
+    kafka_user       = var.security.kafka_user
+    kafka_passwd     = var.security.kafka_passwd
     kafka_heap_size  = var.heap_size.kafka
     kafka_partitions = 8
   }
@@ -86,7 +107,7 @@ data "template_file" "kafka" {
 
 resource "azurerm_linux_virtual_machine" "kafka" {
   name                = local.kafka_vm_name
-  resource_group_name = var.resource_group_name
+  resource_group_name = var.resource_group.name
   location            = var.location
   size                = var.vm_size.kafka
   admin_username      = var.username

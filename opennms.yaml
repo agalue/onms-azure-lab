@@ -75,6 +75,69 @@ write_files:
     settings.index.number_of_replicas=0
 
 - owner: root:root
+  path: /etc/nginx/default.d/opennms.conf
+  content: |
+    server_name ${public_fqdn};
+    # maintain the .well-known directory alias for LetsEncrypt renewals
+    location /.well-known {
+      alias /var/www/${public_fqdn}/.well-known;
+    }
+    location /hawtio/ {
+      proxy_pass http://localhost:8980/hawtio/;
+    }
+    location /grafana/ {
+      proxy_pass http://localhost:3000/;
+    }
+    location /opennms/ {
+      proxy_set_header    Host $host;
+      proxy_set_header    X-Real-IP $remote_addr;
+      proxy_set_header    X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header    X-Forwarded-Proto $scheme;
+      proxy_set_header    Upgrade $http_upgrade;
+      proxy_set_header    Connection "Upgrade";
+      proxy_pass          http://localhost:8980/opennms/;
+      proxy_redirect      default;
+      proxy_read_timeout  90;
+    }
+
+- owner: root:root
+  permissions: '0755'
+  path: /tmp/enable-security.sh
+  content: |
+    #!/bin/bash
+    if [ "${security_enabled}" != "true" ]; then
+      echo "Security is not enabled"
+      exit
+    fi
+    dnf install -y nginx certbot python3-certbot-nginx
+    mkdir -p /var/www/${public_fqdn}/.well-known
+    chown nginx:nginx /var/www
+    setsebool -P httpd_can_network_connect 1
+    systemctl --now enable nginx
+    sleep 5
+    certbot --nginx -d ${public_fqdn} --non-interactive --agree-tos -m ${email}
+    sed -i -r "s|^;domain =.*|domain = ${public_fqdn}|" /etc/grafana/grafana.ini
+    sed -i -r "s|^;root_url =.*|root_url = %(protocol)s://%(domain)s:%(http_port)s/grafana/|" /etc/grafana/grafana.ini
+    cat <<EOF > /opt/opennms/etc/opennms.properties.d/webui.properties
+    org.opennms.netmgt.jetty.host = 127.0.0.1
+    opennms.web.base-url = https://%x%c/
+    EOF
+    for module in sink rpc; do
+      cat <<EOF >> /opt/opennms/etc/opennms.properties.d/kafka.properties
+    # Security for $module
+    org.opennms.core.ipc.$module.kafka.security.protocol=SASL_PLAINTEXT
+    org.opennms.core.ipc.$module.kafka.sasl.mechanism=SCRAM-SHA-512
+    org.opennms.core.ipc.$module.kafka.sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required username="${kafka_user}" password="${kafka_passwd}";
+    EOF
+    done
+    cat <<EOF >> /opt/opennms/etc/org.opennms.features.kafka.producer.client.cfg
+    # Security
+    security.protocol=SASL_PLAINTEXT
+    sasl.mechanism=SCRAM-SHA-512
+    sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required username="${kafka_user}" password="${kafka_passwd}";
+    EOF
+
+- owner: root:root
   permissions: '0755'
   path: /opt/opennms/bin/setup.sh
   content: |
@@ -127,12 +190,11 @@ runcmd:
 # Install OpenNMS Horizon and Helm
 - /opt/opennms/bin/setup.sh
 
-# Configure and start OpenNMS
+# Configure and start OpenNMS and Grafana
 - echo 'JAVA_HEAP_SIZE=${heap_size}' > /opt/opennms/etc/opennms.conf
 - sed -r -i 's/enabled="false"/enabled="true"/' /opt/opennms/etc/telemetryd-configuration.xml
 - /opt/opennms/bin/runjava -s
 - /opt/opennms/bin/install -dis
+- /tmp/enable-security.sh
 - systemctl --now enable opennms
-
-# Configure and start Grafana
 - systemctl --now enable grafana-server
