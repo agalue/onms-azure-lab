@@ -98,12 +98,12 @@ export azure_location="eastus"  # Must match location in Terraform
 export security_enabled="true"  # Must match security.enabled in Terraform
 export kafka_user="opennms"     # Must match security.kafka_user in Terraform
 export kafka_passwd="0p3nNM5;"  # Must match security.kafka_passwd in Terraform
-export minion_heap="512m"       # Must be less than the value specified via -m in multipass
+export minion_heap="1g"         # Must be less than the value specified via -m in multipass
 export minion_location="Apex"
 export minion_id="ag-minion01"
 
 envsubst < minion-template.yaml > /tmp/$minion_id.yaml
-multipass launch -m 1G -n $minion_id --cloud-init /tmp/$minion_id.yaml
+multipass launch -m 2G -n $minion_id --cloud-init /tmp/$minion_id.yaml
 ```
 
 > Ensure the usage of the appropriate content based on how you started the lab.

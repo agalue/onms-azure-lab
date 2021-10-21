@@ -128,10 +128,19 @@ write_files:
   path: /tmp/enable-authentication.sh
   content: |
     #!/bin/bash
+    function wait_for {
+      echo "Waiting for $1:$2 ."
+      until echo -n >/dev/tcp/$1/$2 2>/dev/null; do
+        printf '.'
+        sleep 5
+      done
+      echo "done"
+    }
     if [ "${security_enabled}" != "true" ]; then
       echo "Security is not enabled"
       exit
     fi
+    wait_for $(hostname) 9092
     /opt/kafka/bin/kafka-configs.sh --bootstrap-server $(hostname):9092 \
       --alter \
       --add-config "SCRAM-SHA-256=[password=${kafka_passwd}],SCRAM-SHA-512=[password=${kafka_passwd}]" \
@@ -153,7 +162,6 @@ write_files:
       user_${zk_user}="${zk_passwd}";
     };
     EOF
-    sudo chown kafka:kafka /opt/kafka/config/zookeeper_jaas.conf
     sudo chmod 0600 /opt/kafka/config/zookeeper_jaas.conf
     cat <<EOF | sudo tee /opt/kafka/config/kafka_jaas.conf
     KafkaServer {
@@ -167,12 +175,16 @@ write_files:
       password="${zk_passwd}";
     };
     EOF
-    sudo chown kafka:kafka /opt/kafka/config/kafka_jaas.conf
     sudo chmod 0600 /opt/kafka/config/kafka_jaas.conf
     OPTS='Environment="KAFKA_OPTS=-Djava.security.auth.login.config=/opt/kafka/config/zookeeper_jaas.conf"'
     sudo sed -i -r -e "/^ExecStart=.*/i $OPTS" /etc/systemd/system/zookeeper.service
     OPTS='Environment="KAFKA_OPTS=-Djava.security.auth.login.config=/opt/kafka/config/kafka_jaas.conf"'
     sudo sed -i -r -e "/^ExecStart=.*/i $OPTS" /etc/systemd/system/kafka.service
+    sudo systemctl daemon-reload
+    sudo systemctl restart zookeeper
+    wait_for 127.0.0.1 2181
+    sudo systemctl restart kafka
+    wait_for $(hostname) 9092
 
 - owner: root:root
   permissions: '0755'
@@ -191,13 +203,12 @@ write_files:
     sudo openssl pkcs12 -export \
       -in /etc/letsencrypt/live/${public_fqdn}/fullchain.pem \
       -inkey /etc/letsencrypt/live/${public_fqdn}/privkey.pem \
-      -out $TEMP_P12 -name kafka -password pass:${jks_passwd}
+      -out $TEMP_P12 -name kafka -password "pass:${jks_passwd}"
     sudo keytool -importkeystore -alias kafka \
-      -deststorepass ${jks_passwd} -destkeypass ${jks_passwd} -destkeystore $TEMP_KEYSTORE \
-      -srckeystore $TEMP_P12 -srcstoretype PKCS12 -srcstorepass ${jks_passwd}
+      -deststorepass "${jks_passwd}" -destkeypass "${jks_passwd}" -destkeystore $TEMP_KEYSTORE \
+      -srckeystore $TEMP_P12 -srcstoretype PKCS12 -srcstorepass "${jks_passwd}"
     sudo cp $TEMP_KEYSTORE $TARGET_KEYSTORE
     sudo chmod 440 $TARGET_KEYSTORE
-    sudo chown kafka:kafka $TARGET_KEYSTORE
     sudo rm -f $TEMP_P12 $TEMP_KEYSTORE
     CONFIG="/opt/kafka/config/server.properties"
     sudo sed -i -r '/listener.security.protocol.map/d' $CONFIG
@@ -207,6 +218,7 @@ write_files:
     ssl.keystore.password=${jks_passwd}
     ssl.key.password=${jks_passwd}
     EOF
+    sudo systemctl restart kafka
 
 packages:
 - net-snmp
@@ -226,12 +238,12 @@ runcmd:
 - mv -f /tmp/*.properties /opt/kafka/config/
 - mkdir -p /data/zookeeper /data/kafka
 - echo 1 > /data/zookeeper/myid
-- /tmp/enable-authentication.sh
-- /tmp/enable-encryption.sh
 - systemctl daemon-reload
 - systemctl --now enable zookeeper
 - systemctl --now enable kafka
 - systemctl --now enable snmpd
 - systemctl --now enable docker
+- /tmp/enable-authentication.sh
+- /tmp/enable-encryption.sh
 - usermod -aG docker ${user}
 - docker run --name cmak -d -e ZK_HOSTS="$(hostname):2181" -e KAFKA_MANAGER_AUTH_ENABLED="true" -e KAFKA_MANAGER_USERNAME="${cmak_user}" -e KAFKA_MANAGER_PASSWORD="${cmak_passwd}" -e APPLICATION_SECRET="${cmak_passwd}" -p 9000:9000 hlebalbau/kafka-manager:stable

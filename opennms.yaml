@@ -123,14 +123,14 @@ write_files:
     opennms.web.base-url = https://%x%c/
     EOF
     for module in sink rpc; do
-      cat <<EOF >> /etc/opennms/opennms.properties.d/kafka.properties
+      cat <<EOF >> /opt/opennms/etc/opennms.properties.d/kafka.properties
     # Security for $module
     org.opennms.core.ipc.$module.kafka.security.protocol=SASL_PLAINTEXT
     org.opennms.core.ipc.$module.kafka.sasl.mechanism=SCRAM-SHA-512
     org.opennms.core.ipc.$module.kafka.sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required username="${kafka_user}" password="${kafka_passwd}";
     EOF
     done
-    cat <<EOF >> /etc/opennms/org.opennms.features.kafka.producer.client.cfg
+    cat <<EOF >> /opt/opennms/etc/org.opennms.features.kafka.producer.client.cfg
     # Security
     security.protocol=SASL_PLAINTEXT
     sasl.mechanism=SCRAM-SHA-512
