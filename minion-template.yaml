@@ -64,10 +64,10 @@ bootcmd:
   - curl -s https://debian.opennms.org/OPENNMS-GPG-KEY | apt-key add -
 
 runcmd:
-  - /tmp/enable-security.sh
   - rsync -avr /etc/minion-overlay/ /etc/minion/
   - sed -i -r 's/# export JAVA_MIN_MEM=.*/export JAVA_MIN_MEM="$minion_heap"/' /etc/default/minion
   - sed -i -r 's/# export JAVA_MAX_MEM=.*/export JAVA_MAX_MEM="$minion_heap"/' /etc/default/minion
   - /usr/share/minion/bin/scvcli set opennms.http admin admin
   - /usr/share/minion/bin/scvcli set opennms.broker admin admin
+  - /tmp/enable-security.sh
   - systemctl --now enable minion
