@@ -111,7 +111,7 @@ For testing purposes, you can start a Minion with Docker using the provided scri
   --kafka_boostrap "ag-lab1-kafka.eastus.cloudapp.azure.com:9094" \
   --kafka_user "opennms" \
   --kafka_passwd "0p3nNM5;" \
-  --jks_passwd "0p3nNM5"
+  --jks_passwd "jks0p3nNM5;"
 ```
 ```
 

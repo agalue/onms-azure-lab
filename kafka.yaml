@@ -126,19 +126,19 @@ write_files:
 - encoding: b64
   content: ${ca_root_pem}
   owner: root:root
-  path: /root/pki/ca-root.pem
+  path: /etc/pki/onms/ca-root.pem
   permissions: '0600'
 
 - encoding: b64
   content: ${ca_intermediate_pem}
   owner: root:root
-  path: /root/pki/ca-intermediate.pem
+  path: /etc/pki/onms/ca-intermediate.pem
   permissions: '0600'
 
 - encoding: b64
   content: ${ca_intermediate_key}
   owner: root:root
-  path: /root/pki/ca-intermediate-key.pem
+  path: /etc/pki/onms/ca-intermediate-key.pem
   permissions: '0600'
 
 - owner: root:root
@@ -211,7 +211,7 @@ write_files:
     #!/bin/bash
     security_enabled="${security_enabled}"
     use_pki="${use_pki}"
-    if [ "$security_enabled" != "true" ] && [ "$use_pki" != "true" ]; then
+    if [ "$security_enabled" != "true" ] || [ "$use_pki" != "true" ]; then
       echo "Security with PKI is not enabled"
       exit
     fi
@@ -225,13 +225,13 @@ write_files:
     fi
     # Verify CA files
     for file in "ca-root.pem" "ca-intermediate.pem" "ca-intermediate-key.pem"; do
-      if [ ! -f /root/pki/$file ]; then
-        echo "/root/pki/$file is required"
+      if [ ! -f /etc/pki/onms/$file ]; then
+        echo "/etc/pki/onms/$file is required"
         exit 1
       fi
     done
     # Generate Server Certificate
-    cat <<EOF | cfssl gencert -ca=/root/pki/ca-intermediate.pem -ca-key=/root/pki/ca-intermediate-key.pem - | cfssljson -bare /root/pki/kafka
+    cat <<EOF | cfssl gencert -ca=/etc/pki/onms/ca-intermediate.pem -ca-key=/etc/pki/onms/ca-intermediate-key.pem - | cfssljson -bare /etc/pki/onms/kafka
     {
       "CN": "${public_fqdn}",
       "hosts": [
@@ -257,17 +257,17 @@ write_files:
       ]
     }
     EOF
-    cat /root/pki/ca-intermediate.pem /root/pki/ca-root.pem > /root/pki/ca-fullchain.pem
-    cat /root/pki/kafka.pem /root/pki/ca-fullchain.pem > /root/pki/kafka-fullchain.pem
-    chmod 600 /root/pki/*-fullchain.pem
+    cat /etc/pki/onms/ca-intermediate.pem /etc/pki/onms/ca-root.pem > /etc/pki/onms/ca-fullchain.pem
+    cat /etc/pki/onms/kafka.pem /etc/pki/onms/ca-fullchain.pem > /etc/pki/onms/kafka-fullchain.pem
+    chmod 600 /etc/pki/onms/*-fullchain.pem
     # Server Keystore
     TEMP_P12="/tmp/ssl.p12.$(date +%s)"
     TEMP_KEYSTORE="/tmp/ssl.keystore.$(date +%s)"
     TARGET_KEYSTORE="/opt/kafka/config/private.jks"
     rm -f $TARGET_KEYSTORE
     sudo openssl pkcs12 -export \
-      -in /root/pki/kafka-fullchain.pem \
-      -inkey /root/pki/kafka-key.pem \
+      -in /etc/pki/onms/kafka-fullchain.pem \
+      -inkey /etc/pki/onms/kafka-key.pem \
       -out $TEMP_P12 -name kafka -password "pass:${jks_passwd}"
     sudo keytool -importkeystore -alias kafka \
       -deststorepass "${jks_passwd}" -destkeypass "${jks_passwd}" -destkeystore $TEMP_KEYSTORE \
@@ -281,9 +281,9 @@ write_files:
     TARGET_TRUSTSTORE="/opt/kafka/config/truststore.jks"
     rm -f $TARGET_TRUSTSTORE
     echo "yes" | sudo keytool -importcert -alias ca-intermediate \
-      -file /root/pki/ca-intermediate.pem -storepass "${jks_passwd}" -keystore $TEMP_TRUSTSTORE
+      -file /etc/pki/onms/ca-intermediate.pem -storepass "${jks_passwd}" -keystore $TEMP_TRUSTSTORE
     echo "yes" | sudo keytool -importcert -alias ca-root \
-      -file /root/pki/ca-root.pem -storepass "${jks_passwd}" -keystore $TEMP_TRUSTSTORE
+      -file /etc/pki/onms/ca-root.pem -storepass "${jks_passwd}" -keystore $TEMP_TRUSTSTORE
     sudo cp $TEMP_TRUSTSTORE $TARGET_TRUSTSTORE
     sudo chmod 440 $TARGET_TRUSTSTORE
     sudo rm -f $TEMP_P12 $TEMP_TRUSTSTORE
@@ -298,6 +298,7 @@ write_files:
     ssl.truststore.location=$TARGET_TRUSTSTORE
     ssl.truststore.password=${jks_passwd}
     EOF
+    sudo systemctl restart kafka
 
 - owner: root:root
   permissions: '0755'
@@ -306,7 +307,7 @@ write_files:
     #!/bin/bash
     security_enabled="${security_enabled}"
     use_pki="${use_pki}"
-    if [ "$security_enabled" != "true" ] && [ "$use_pki" != "false" ]; then
+    if [ "$security_enabled" != "true" ] || [ "$use_pki" == "true" ]; then
       echo "Security without PKI is not enabled"
       exit
     fi
