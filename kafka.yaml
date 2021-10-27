@@ -135,6 +135,12 @@ write_files:
   path: /root/pki/ca-intermediate.pem
   permissions: '0600'
 
+- encoding: b64
+  content: ${ca_intermediate_key}
+  owner: root:root
+  path: /root/pki/ca-intermediate-key.pem
+  permissions: '0600'
+
 - owner: root:root
   permissions: '0755'
   path: /opt/kafka/tools/enable-authentication.sh
@@ -215,16 +221,13 @@ write_files:
       wget -O /usr/local/bin/cfssljson https://github.com/cloudflare/cfssl/releases/download/v1.6.1/cfssljson_1.6.1_linux_amd64
       chmod +x /usr/local/bin/cfssljson
     fi
-    # Root CA
-    if [ ! -f /root/pki/ca-root.pem ]; then
-      echo "/root/pki/ca-root.pem is required"
-      exit 1
-    fi
-    # Intermediate CA
-    if [ ! -f /root/pki/ca-intermediate.pem ]; then
-      echo "/root/pki/ca-intermediate.pem is required"
-      exit 1
-    fi
+    # Verify CA files
+    for file in "ca-root.pem" "ca-intermediate.pem" "ca-intermediate-key.pem"; do
+      if [ ! -f /root/pki/$file ]; then
+        echo "/root/pki/$file is required"
+        exit 1
+      fi
+    done
     # Generate Server Certificate
     cat <<EOF | cfssl gencert -ca=/root/pki/ca-intermediate.pem -ca-key=/root/pki/ca-intermediate-key.pem - | cfssljson -bare /root/pki/kafka
     {
@@ -254,10 +257,12 @@ write_files:
     EOF
     cat /root/pki/ca-intermediate.pem /root/pki/ca-root.pem > /root/pki/ca-fullchain.pem
     cat /root/pki/kafka.pem /root/pki/ca-fullchain.pem > /root/pki/kafka-fullchain.pem
+    chmod 600 /root/pki/*-fullchain.pem
     # Server Keystore
     TEMP_P12="/tmp/ssl.p12.$(date +%s)"
     TEMP_KEYSTORE="/tmp/ssl.keystore.$(date +%s)"
     TARGET_KEYSTORE="/opt/kafka/config/private.jks"
+    rm -f $TARGET_KEYSTORE
     sudo openssl pkcs12 -export \
       -in /root/pki/kafka-fullchain.pem \
       -inkey /root/pki/kafka-key.pem \
@@ -272,12 +277,11 @@ write_files:
     TEMP_P12="/tmp/ca.p12.$(date +%s)"
     TEMP_TRUSTSTORE="/tmp/ca.keystore.$(date +%s)"
     TARGET_TRUSTSTORE="/opt/kafka/config/truststore.jks"
-    sudo openssl pkcs12 -export \
-      -in /root/pki/ca-fullchain.pem \
-      -out $TEMP_P12 -name ca -password "pass:${jks_passwd}"
-    sudo keytool -importkeystore -alias ca \
-      -deststorepass "${jks_passwd}" -destkeypass "${jks_passwd}" -destkeystore $TEMP_TRUSTTORE \
-      -srckeystore $TEMP_P12 -srcstoretype PKCS12 -srcstorepass "${jks_passwd}"
+    rm -f $TARGET_TRUSTSTORE
+    echo "yes" | sudo keytool -importcert -alias ca-intermediate \
+      -file /root/pki/ca-intermediate.pem -storepass "${jks_passwd}" -keystore $TEMP_TRUSTSTORE
+    echo "yes" | sudo keytool -importcert -alias ca-root \
+      -file /root/pki/ca-root.pem -storepass "${jks_passwd}" -keystore $TEMP_TRUSTSTORE
     sudo cp $TEMP_TRUSTSTORE $TARGET_TRUSTSTORE
     sudo chmod 440 $TARGET_TRUSTSTORE
     sudo rm -f $TEMP_P12 $TEMP_TRUSTSTORE

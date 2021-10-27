@@ -106,6 +106,7 @@ data "template_file" "kafka" {
     # Used only with Private Certificates generation
     ca_root_pem         = base64encode(file("./pki/ca-root.pem"))
     ca_intermediate_pem = base64encode(file("./pki/ca-intermediate.pem"))
+    ca_intermediate_key = base64encode(file("./pki/ca-intermediate-key.pem"))
   }
 }
 

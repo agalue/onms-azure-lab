@@ -101,6 +101,7 @@ data "template_file" "opennms" {
     # Used only with Private Certificates generation
     ca_root_pem         = base64encode(file("./pki/ca-root.pem"))
     ca_intermediate_pem = base64encode(file("./pki/ca-intermediate.pem"))
+    ca_intermediate_key = base64encode(file("./pki/ca-intermediate-key.pem"))
 
     # The following are defined this way to enforce the dependency against the external applications
     kafka_bootstrap = "${azurerm_linux_virtual_machine.kafka.name}:9092"
