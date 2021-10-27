@@ -100,15 +100,87 @@ write_files:
       proxy_read_timeout  90;
     }
 
+- encoding: b64
+  content: ${ca_root_pem}
+  owner: root:root
+  path: /root/pki/ca-root.pem
+  permissions: '0600'
+
+- encoding: b64
+  content: ${ca_intermediate_pem}
+  owner: root:root
+  path: /root/pki/ca-intermediate.pem
+  permissions: '0600'
+
 - owner: root:root
   permissions: '0755'
-  path: /tmp/enable-security.sh
+  path: /opt/opennms/bin/install-security-private.sh
   content: |
     #!/bin/bash
     if [ "${security_enabled}" != "true" ]; then
       echo "Security is not enabled"
       exit
     fi
+    if [ ! -f /usr/local/bin/cfssl ]; then
+      wget -O /usr/local/bin/cfssl https://github.com/cloudflare/cfssl/releases/download/v1.6.1/cfssl_1.6.1_linux_amd64
+      chmod +x /usr/local/bin/cfssl
+    fi
+    if [ ! -f /usr/local/bin/cfssljson ]; then
+      wget -O /usr/local/bin/cfssljson https://github.com/cloudflare/cfssl/releases/download/v1.6.1/cfssljson_1.6.1_linux_amd64
+      chmod +x /usr/local/bin/cfssljson
+    fi
+    # Root CA
+    if [ ! -f /root/pki/ca-root.pem ]; then
+      echo "/root/pki/ca-root.pem is required"
+      exit 1
+    fi
+    # Intermediate CA
+    if [ ! -f /root/pki/ca-intermediate.pem ]; then
+      echo "/root/pki/ca-intermediate.pem is required"
+      exit 1
+    fi
+    # Generate Server Certificate
+    cat <<EOF | cfssl gencert -ca=/root/pki/ca-intermediate.pem -ca-key=/root/pki/ca-intermediate-key.pem - | cfssljson -bare /root/pki/onms
+    {
+      "CN": "${public_fqdn}",
+      "hosts": [
+        "$(hostname)",
+        "${public_fqdn}"
+      ],
+      "key": {
+        "algo": "rsa",
+        "size": 2048
+      },
+      "names": [
+        {
+          "C": "US",
+          "ST": "NC",
+          "O": "The OpenNMS Group, Inc."
+        }
+      ],
+      "expiry": "43800h",
+      "usages": [
+        "signing",
+        "key encipherment",
+        "server auth"
+      ]
+    }
+    EOF
+    cat /root/pki/ca-intermediate.pem /root/pki/ca-root.pem > /root/pki/ca-fullchain.pem
+    cat /root/pki/onms.pem /root/pki/ca-fullchain.pem > /root/pki/onms-fullchain.pem
+    # Configure Nginx
+    # FIXME
+
+- owner: root:root
+  permissions: '0755'
+  path: /opt/opennms/bin/install-security.sh
+  content: |
+    #!/bin/bash
+    if [ "${security_enabled}" != "true" ]; then
+      echo "Security is not enabled"
+      exit
+    fi
+    # Creating Certificate and configuring TLS in Nginx
     dnf install -y nginx certbot python3-certbot-nginx
     mkdir -p /var/www/${public_fqdn}/.well-known
     chown nginx:nginx /var/www
@@ -116,6 +188,16 @@ write_files:
     systemctl --now enable nginx
     sleep 5
     certbot --nginx -d ${public_fqdn} --non-interactive --agree-tos -m ${email}
+
+- owner: root:root
+  permissions: '0755'
+  path: /opt/opennms/bin/enable-security.sh
+  content: |
+    #!/bin/bash
+    if [ "${security_enabled}" != "true" ]; then
+      echo "Security is not enabled"
+      exit
+    fi
     sed -i -r "s|^;domain =.*|domain = ${public_fqdn}|" /etc/grafana/grafana.ini
     sed -i -r "s|^;root_url =.*|root_url = %(protocol)s://%(domain)s:%(http_port)s/grafana/|" /etc/grafana/grafana.ini
     cat <<EOF > /opt/opennms/etc/opennms.properties.d/webui.properties
@@ -195,6 +277,7 @@ runcmd:
 - sed -r -i 's/enabled="false"/enabled="true"/' /opt/opennms/etc/telemetryd-configuration.xml
 - /opt/opennms/bin/runjava -s
 - /opt/opennms/bin/install -dis
-- /tmp/enable-security.sh
+- /opt/opennms/bin/install-security.sh
+- /opt/opennms/bin/enable-security.sh
 - systemctl --now enable opennms
 - systemctl --now enable grafana-server

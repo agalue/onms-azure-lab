@@ -89,8 +89,7 @@ data "template_file" "kafka" {
   vars = {
     user             = var.username
     location         = var.location
-    email            = var.email
-    public_fqdn      = "${local.kafka_vm_name}.${var.location}.cloudapp.azure.com"
+    email            = var.email # Used only with LetsEncrypt
     security_enabled = var.security.enabled
     jks_passwd       = var.security.jks_passwd
     cmak_user        = var.security.cmak_user
@@ -102,6 +101,11 @@ data "template_file" "kafka" {
     kafka_passwd     = var.security.kafka_passwd
     kafka_heap_size  = var.heap_size.kafka
     kafka_partitions = 8
+    public_fqdn      = "${local.kafka_vm_name}.${var.location}.cloudapp.azure.com"
+
+    # Used only with Private Certificates generation
+    ca_root_pem         = base64encode(file("./pki/ca-root.pem"))
+    ca_intermediate_pem = base64encode(file("./pki/ca-intermediate.pem"))
   }
 }
 

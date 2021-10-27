@@ -39,6 +39,16 @@ az login
 terraform init
 ```
 
+* Initialize PKI for Private CAs
+
+```bash
+cd pki/
+./generate.sh
+cd ..
+```
+
+> Failing on this will prevent Terraform from deploying the resources, even if you're planning to use LetsEncrypt.
+
 * Review [vars.tf](./vars.tf) in case you want to alter something
 
 * Create the resources in Azure
