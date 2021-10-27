@@ -77,6 +77,7 @@ resource_group = {
 }
 security = {
   enabled      = true
+  use_pki      = false
   zk_user      = "zkonms"
   zk_passwd    = "zk0p3nNM5;"
   kafka_user   = "opennms"

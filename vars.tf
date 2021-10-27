@@ -125,6 +125,7 @@ variable "security" {
   description = "Credentials to access servers"
   type = object({
     enabled      = bool
+    use_pki      = bool
     zk_user      = string
     zk_passwd    = string
     kafka_user   = string
@@ -134,7 +135,8 @@ variable "security" {
     cmak_passwd  = string
   })
   default = {
-    enabled      = false
+    enabled      = false # Set to 'true' to enable Authentication and Encryption for Kafka and OpenNMS
+    use_pki      = false # Set to 'true' to use a Private Certificate Chain for encryption, or 'false' to use LetsEncrypt 
     zk_user      = "zkonms"
     zk_passwd    = "zk0p3nNM5;"
     kafka_user   = "opennms"

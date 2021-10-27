@@ -209,8 +209,10 @@ write_files:
   path: /opt/kafka/tools/enable-encryption-private.sh
   content: |
     #!/bin/bash
-    if [ "${security_enabled}" != "true" ]; then
-      echo "Security is not enabled"
+    security_enabled="${security_enabled}"
+    use_pki="${use_pki}"
+    if [ "$security_enabled" != "true" ] && [ "$use_pki" != "true" ]; then
+      echo "Security with PKI is not enabled"
       exit
     fi
     if [ ! -f /usr/local/bin/cfssl ]; then
@@ -302,8 +304,10 @@ write_files:
   path: /opt/kafka/tools/enable-encryption.sh
   content: |
     #!/bin/bash
-    if [ "${security_enabled}" != "true" ]; then
-      echo "Security is not enabled"
+    security_enabled="${security_enabled}"
+    use_pki="${use_pki}"
+    if [ "$security_enabled" != "true" ] && [ "$use_pki" != "false" ]; then
+      echo "Security without PKI is not enabled"
       exit
     fi
     sudo dnf install -y certbot python3-certbot-nginx
@@ -359,5 +363,6 @@ runcmd:
 - systemctl --now enable docker
 - /opt/kafka/tools/enable-authentication.sh
 - /opt/kafka/tools/enable-encryption.sh
+- /opt/kafka/tools/enable-encryption-private.sh
 - usermod -aG docker ${user}
 - docker run --name cmak -d -e ZK_HOSTS="$(hostname):2181" -e KAFKA_MANAGER_AUTH_ENABLED="true" -e KAFKA_MANAGER_USERNAME="${cmak_user}" -e KAFKA_MANAGER_PASSWORD="${cmak_passwd}" -e APPLICATION_SECRET="${cmak_passwd}" -p 9000:9000 hlebalbau/kafka-manager:stable

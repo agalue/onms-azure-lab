@@ -91,6 +91,7 @@ data "template_file" "kafka" {
     location         = var.location
     email            = var.email # Used only with LetsEncrypt
     security_enabled = var.security.enabled
+    use_pki          = var.security.use_pki
     jks_passwd       = var.security.jks_passwd
     cmak_user        = var.security.cmak_user
     cmak_passwd      = var.security.cmak_passwd

@@ -175,7 +175,7 @@ write_files:
         ssl_ciphers "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384";
       }
       server {
-        if (\$host = ${full_fqdn}) {
+        if (\$host = ${public_fqdn}) {
           return 301 https://\$host\$request_uri;
         } # managed by Certbot
         listen       80 default_server;
@@ -190,8 +190,10 @@ write_files:
   path: /opt/opennms/bin/install-security-private.sh
   content: |
     #!/bin/bash
-    if [ "${security_enabled}" != "true" ]; then
-      echo "Security is not enabled"
+    security_enabled="${security_enabled}"
+    use_pki="${use_pki}"
+    if [ "$security_enabled" != "true" ] && [ "$use_pki" != "true" ]; then
+      echo "Security with PKI is not enabled"
       exit
     fi
     if [ ! -f /usr/local/bin/cfssl ]; then
@@ -209,6 +211,7 @@ write_files:
         exit 1
       fi
     done
+    echo "Creating Certificate for Nginx via PKI..."
     # Generate Server Certificate
     cat <<EOF | cfssl gencert -ca=/root/pki/ca-intermediate.pem -ca-key=/root/pki/ca-intermediate-key.pem - | cfssljson -bare /root/pki/onms
     {
@@ -246,13 +249,14 @@ write_files:
   permissions: '0755'
   path: /opt/opennms/bin/install-security.sh
   content: |
-    #!/bin/bash
-    if [ "${security_enabled}" != "true" ]; then
-      echo "Security is not enabled"
+    security_enabled="${security_enabled}"
+    use_pki="${use_pki}"
+    if [ "$security_enabled" != "true" ] && [ "$use_pki" != "false" ]; then
+      echo "Security without PKI is not enabled"
       exit
     fi
-    # Creating Certificate and configuring TLS in Nginx
-    dnf install -y nginx certbot python3-certbot-nginx
+    echo "Creating Certificate for Nginx via LetsEncrypt..."
+    dnf install -y certbot python3-certbot-nginx
     mkdir -p /var/www/${public_fqdn}/.well-known
     chown nginx:nginx /var/www
     setsebool -P httpd_can_network_connect 1
@@ -326,6 +330,7 @@ packages:
 - epel-release
 - java-11-openjdk-devel
 - postgresql-server
+- nginx
 
 runcmd:
 - sysctl --system
@@ -349,6 +354,7 @@ runcmd:
 - /opt/opennms/bin/runjava -s
 - /opt/opennms/bin/install -dis
 - /opt/opennms/bin/install-security.sh
+- /opt/opennms/bin/install-security-private.sh
 - /opt/opennms/bin/enable-security.sh
 - systemctl --now enable opennms
 - systemctl --now enable grafana-server

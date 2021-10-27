@@ -94,6 +94,7 @@ data "template_file" "opennms" {
     onms_version     = var.onms_version
     heap_size        = var.heap_size.opennms
     security_enabled = var.security.enabled
+    use_pki          = var.security.use_pki
     kafka_user       = var.security.kafka_user
     kafka_passwd     = var.security.kafka_passwd
     public_fqdn      = "${local.onms_vm_name}.${var.location}.cloudapp.azure.com"
