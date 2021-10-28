@@ -123,9 +123,27 @@ write_files:
     # Recommended to avoid disrupting messages workflow
     delete.topic.enable=false
 
+- encoding: b64
+  content: ${ca_root_pem}
+  owner: root:root
+  path: /etc/pki/onms/ca-root.pem
+  permissions: '0600'
+
+- encoding: b64
+  content: ${ca_intermediate_pem}
+  owner: root:root
+  path: /etc/pki/onms/ca-intermediate.pem
+  permissions: '0600'
+
+- encoding: b64
+  content: ${ca_intermediate_key}
+  owner: root:root
+  path: /etc/pki/onms/ca-intermediate-key.pem
+  permissions: '0600'
+
 - owner: root:root
   permissions: '0755'
-  path: /tmp/enable-authentication.sh
+  path: /opt/kafka/tools/enable-authentication.sh
   content: |
     #!/bin/bash
     function wait_for {
@@ -188,15 +206,114 @@ write_files:
 
 - owner: root:root
   permissions: '0755'
-  path: /tmp/enable-encryption.sh
+  path: /opt/kafka/tools/enable-encryption-private.sh
   content: |
     #!/bin/bash
-    if [ "${security_enabled}" != "true" ]; then
-      echo "Security is not enabled"
+    security_enabled="${security_enabled}"
+    use_pki="${use_pki}"
+    if [ "$security_enabled" != "true" ] || [ "$use_pki" != "true" ]; then
+      echo "Security with PKI is not enabled"
+      exit
+    fi
+    if [ ! -f /usr/local/bin/cfssl ]; then
+      wget -O /usr/local/bin/cfssl https://github.com/cloudflare/cfssl/releases/download/v1.6.1/cfssl_1.6.1_linux_amd64
+      chmod +x /usr/local/bin/cfssl
+    fi
+    if [ ! -f /usr/local/bin/cfssljson ]; then
+      wget -O /usr/local/bin/cfssljson https://github.com/cloudflare/cfssl/releases/download/v1.6.1/cfssljson_1.6.1_linux_amd64
+      chmod +x /usr/local/bin/cfssljson
+    fi
+    # Verify CA files
+    for file in "ca-root.pem" "ca-intermediate.pem" "ca-intermediate-key.pem"; do
+      if [ ! -f /etc/pki/onms/$file ]; then
+        echo "/etc/pki/onms/$file is required"
+        exit 1
+      fi
+    done
+    # Generate Server Certificate
+    cat <<EOF | cfssl gencert -ca=/etc/pki/onms/ca-intermediate.pem -ca-key=/etc/pki/onms/ca-intermediate-key.pem - | cfssljson -bare /etc/pki/onms/kafka
+    {
+      "CN": "${public_fqdn}",
+      "hosts": [
+        "$(hostname)",
+        "${public_fqdn}"
+      ],
+      "key": {
+        "algo": "rsa",
+        "size": 2048
+      },
+      "names": [
+        {
+          "C": "US",
+          "ST": "NC",
+          "O": "The OpenNMS Group, Inc."
+        }
+      ],
+      "expiry": "43800h",
+      "usages": [
+        "signing",
+        "key encipherment",
+        "server auth"
+      ]
+    }
+    EOF
+    cat /etc/pki/onms/ca-intermediate.pem /etc/pki/onms/ca-root.pem > /etc/pki/onms/ca-fullchain.pem
+    cat /etc/pki/onms/kafka.pem /etc/pki/onms/ca-fullchain.pem > /etc/pki/onms/kafka-fullchain.pem
+    chmod 600 /etc/pki/onms/*-fullchain.pem
+    # Server Keystore
+    TEMP_P12="/tmp/ssl.p12.$(date +%s)"
+    TEMP_KEYSTORE="/tmp/ssl.keystore.$(date +%s)"
+    TARGET_KEYSTORE="/opt/kafka/config/private.jks"
+    rm -f $TARGET_KEYSTORE
+    sudo openssl pkcs12 -export \
+      -in /etc/pki/onms/kafka-fullchain.pem \
+      -inkey /etc/pki/onms/kafka-key.pem \
+      -out $TEMP_P12 -name kafka -password "pass:${jks_passwd}"
+    sudo keytool -importkeystore -alias kafka \
+      -deststorepass "${jks_passwd}" -destkeypass "${jks_passwd}" -destkeystore $TEMP_KEYSTORE \
+      -srckeystore $TEMP_P12 -srcstoretype PKCS12 -srcstorepass "${jks_passwd}"
+    sudo cp $TEMP_KEYSTORE $TARGET_KEYSTORE
+    sudo chmod 440 $TARGET_KEYSTORE
+    sudo rm -f $TEMP_P12 $TEMP_KEYSTORE
+    # Server Truststore
+    TEMP_P12="/tmp/ca.p12.$(date +%s)"
+    TEMP_TRUSTSTORE="/tmp/ca.keystore.$(date +%s)"
+    TARGET_TRUSTSTORE="/opt/kafka/config/truststore.jks"
+    rm -f $TARGET_TRUSTSTORE
+    echo "yes" | sudo keytool -importcert -alias ca-intermediate \
+      -file /etc/pki/onms/ca-intermediate.pem -storepass "${jks_passwd}" -keystore $TEMP_TRUSTSTORE
+    echo "yes" | sudo keytool -importcert -alias ca-root \
+      -file /etc/pki/onms/ca-root.pem -storepass "${jks_passwd}" -keystore $TEMP_TRUSTSTORE
+    sudo cp $TEMP_TRUSTSTORE $TARGET_TRUSTSTORE
+    sudo chmod 440 $TARGET_TRUSTSTORE
+    sudo rm -f $TEMP_P12 $TEMP_TRUSTSTORE
+    # Update configuration
+    CONFIG="/opt/kafka/config/server.properties"
+    sudo sed -i -r '/listener.security.protocol.map/d' $CONFIG
+    cat <<EOF | sudo tee -a $CONFIG
+    listener.security.protocol.map=INSIDE:SASL_PLAINTEXT,OUTSIDE:SASL_SSL
+    ssl.keystore.location=$TARGET_KEYSTORE
+    ssl.keystore.password=${jks_passwd}
+    ssl.key.password=${jks_passwd}
+    ssl.truststore.location=$TARGET_TRUSTSTORE
+    ssl.truststore.password=${jks_passwd}
+    EOF
+    sudo systemctl restart kafka
+
+- owner: root:root
+  permissions: '0755'
+  path: /opt/kafka/tools/enable-encryption.sh
+  content: |
+    #!/bin/bash
+    security_enabled="${security_enabled}"
+    use_pki="${use_pki}"
+    if [ "$security_enabled" != "true" ] || [ "$use_pki" == "true" ]; then
+      echo "Security without PKI is not enabled"
       exit
     fi
     sudo dnf install -y certbot python3-certbot-nginx
     sudo certbot certonly --standalone -d ${public_fqdn} --non-interactive --agree-tos -m ${email}
+    # Server Keystore
     TEMP_P12="/tmp/ssl.p12.$(date +%s)"
     TEMP_KEYSTORE="/tmp/ssl.keystore.$(date +%s)"
     TARGET_KEYSTORE="/opt/kafka/config/letsencrypt.jks"
@@ -210,6 +327,7 @@ write_files:
     sudo cp $TEMP_KEYSTORE $TARGET_KEYSTORE
     sudo chmod 440 $TARGET_KEYSTORE
     sudo rm -f $TEMP_P12 $TEMP_KEYSTORE
+    # Update configuration
     CONFIG="/opt/kafka/config/server.properties"
     sudo sed -i -r '/listener.security.protocol.map/d' $CONFIG
     cat <<EOF | sudo tee -a $CONFIG
@@ -233,8 +351,9 @@ runcmd:
 - sysctl --system
 - wget -O /tmp/kafka.tar.gz https://downloads.apache.org/kafka/2.8.1/kafka_2.13-2.8.1.tgz
 - cd /opt
-- mkdir kafka
+- mkdir -p kafka
 - tar -xvzf /tmp/kafka.tar.gz -C kafka --strip-components 1
+- rsync -avr /opt/kafka/config/ /opt/kafka/config.bak/
 - mv -f /tmp/*.properties /opt/kafka/config/
 - mkdir -p /data/zookeeper /data/kafka
 - echo 1 > /data/zookeeper/myid
@@ -243,7 +362,8 @@ runcmd:
 - systemctl --now enable kafka
 - systemctl --now enable snmpd
 - systemctl --now enable docker
-- /tmp/enable-authentication.sh
-- /tmp/enable-encryption.sh
+- /opt/kafka/tools/enable-authentication.sh
+- /opt/kafka/tools/enable-encryption.sh
+- /opt/kafka/tools/enable-encryption-private.sh
 - usermod -aG docker ${user}
 - docker run --name cmak -d -e ZK_HOSTS="$(hostname):2181" -e KAFKA_MANAGER_AUTH_ENABLED="true" -e KAFKA_MANAGER_USERNAME="${cmak_user}" -e KAFKA_MANAGER_PASSWORD="${cmak_passwd}" -e APPLICATION_SECRET="${cmak_passwd}" -p 9000:9000 hlebalbau/kafka-manager:stable

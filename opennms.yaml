@@ -30,7 +30,6 @@ write_files:
     org.opennms.core.ipc.rpc.strategy=kafka
     org.opennms.core.ipc.rpc.kafka.bootstrap.servers=${kafka_bootstrap}
     org.opennms.core.ipc.rpc.kafka.ttl=30000
-    org.opennms.core.ipc.rpc.kafka.single-topic=true
     org.opennms.core.ipc.rpc.kafka.auto.offset.reset=latest
 
 # OpenNMS Kafka Producer Client
@@ -100,22 +99,182 @@ write_files:
       proxy_read_timeout  90;
     }
 
+- encoding: b64
+  content: ${ca_root_pem}
+  owner: root:root
+  path: /etc/pki/onms/ca-root.pem
+  permissions: '0600'
+
+- encoding: b64
+  content: ${ca_intermediate_pem}
+  owner: root:root
+  path: /etc/pki/onms/ca-intermediate.pem
+  permissions: '0600'
+
+- encoding: b64
+  content: ${ca_intermediate_key}
+  owner: root:root
+  path: /etc/pki/onms/ca-intermediate-key.pem
+  permissions: '0600'
+
+- owner: root:root
+  permissions: '0644'
+  path: /root/nginx-pki.conf
+  content: |
+    # For more information on configuration, see:
+    #   * Official English Documentation: http://nginx.org/en/docs/
+    #   * Official Russian Documentation: http://nginx.org/ru/docs/
+    user nginx;
+    worker_processes auto;
+    error_log /var/log/nginx/error.log;
+    pid /run/nginx.pid;
+    # Load dynamic modules. See /usr/share/doc/nginx/README.dynamic.
+    include /usr/share/nginx/modules/*.conf;
+    events {
+      worker_connections 1024;
+    }
+    http {
+      log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
+                        '$status $body_bytes_sent "$http_referer" '
+                        '"$http_user_agent" "$http_x_forwarded_for"';
+      access_log  /var/log/nginx/access.log  main;
+      sendfile            on;
+      tcp_nopush          on;
+      tcp_nodelay         on;
+      keepalive_timeout   65;
+      types_hash_max_size 2048;
+      include             /etc/nginx/mime.types;
+      default_type        application/octet-stream;
+      # Load modular configuration files from the /etc/nginx/conf.d directory.
+      # See http://nginx.org/en/docs/ngx_core_module.html#include
+      # for more information.
+      include /etc/nginx/conf.d/*.conf;
+      server {
+        server_name  _;
+        root /usr/share/nginx/html;
+        # Load configuration files for the default server block.
+        include /etc/nginx/default.d/*.conf;
+        location / {
+        }
+        error_page 404 /404.html;
+          location = /40x.html {
+        }
+        error_page 500 502 503 504 /50x.html;
+          location = /50x.html {
+        }
+        listen [::]:443 ssl ipv6only=on;
+        listen 443 ssl;
+        ssl_certificate /etc/pki/onms/onms-fullchain.pem;
+        ssl_certificate_key /etc/pki/onms/onms-key.pem;
+        ssl_session_cache shared:le_nginx_SSL:10m;
+        ssl_session_timeout 1440m;
+        ssl_session_tickets off;
+        ssl_protocols TLSv1.2 TLSv1.3;
+        ssl_prefer_server_ciphers off;
+        ssl_ciphers "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384";
+      }
+      server {
+        if ($host = ${public_fqdn}) {
+          return 301 https://$host$request_uri;
+        } # managed by Certbot
+        listen       80 default_server;
+        listen       [::]:80 default_server;
+        server_name  _;
+        return 404; # managed by Certbot
+      }
+    }
+
 - owner: root:root
   permissions: '0755'
-  path: /tmp/enable-security.sh
+  path: /opt/opennms/bin/install-security-private.sh
   content: |
     #!/bin/bash
-    if [ "${security_enabled}" != "true" ]; then
-      echo "Security is not enabled"
+    security_enabled="${security_enabled}"
+    use_pki="${use_pki}"
+    if [ "$security_enabled" != "true" ] || [ "$use_pki" != "true" ]; then
+      echo "Security with PKI is not enabled"
       exit
     fi
-    dnf install -y nginx certbot python3-certbot-nginx
+    if [ ! -f /usr/local/bin/cfssl ]; then
+      wget -O /usr/local/bin/cfssl https://github.com/cloudflare/cfssl/releases/download/v1.6.1/cfssl_1.6.1_linux_amd64
+      chmod +x /usr/local/bin/cfssl
+    fi
+    if [ ! -f /usr/local/bin/cfssljson ]; then
+      wget -O /usr/local/bin/cfssljson https://github.com/cloudflare/cfssl/releases/download/v1.6.1/cfssljson_1.6.1_linux_amd64
+      chmod +x /usr/local/bin/cfssljson
+    fi
+    # Verify CA files
+    for file in "ca-root.pem" "ca-intermediate.pem" "ca-intermediate-key.pem"; do
+      if [ ! -f /etc/pki/onms/$file ]; then
+        echo "/etc/pki/onms/$file is required"
+        exit 1
+      fi
+    done
+    echo "Creating Certificate for Nginx via PKI..."
+    # Generate Server Certificate
+    cat <<EOF | cfssl gencert -ca=/etc/pki/onms/ca-intermediate.pem -ca-key=/etc/pki/onms/ca-intermediate-key.pem - | cfssljson -bare /etc/pki/onms/onms
+    {
+      "CN": "${public_fqdn}",
+      "hosts": [
+        "$(hostname)",
+        "${public_fqdn}"
+      ],
+      "key": {
+        "algo": "rsa",
+        "size": 2048
+      },
+      "names": [
+        {
+          "C": "US",
+          "ST": "NC",
+          "O": "The OpenNMS Group, Inc."
+        }
+      ],
+      "expiry": "43800h",
+      "usages": [
+        "signing",
+        "key encipherment",
+        "server auth"
+      ]
+    }
+    EOF
+    cat /etc/pki/onms/ca-intermediate.pem /etc/pki/onms/ca-root.pem > /etc/pki/onms/ca-fullchain.pem
+    cat /etc/pki/onms/onms.pem /etc/pki/onms/ca-fullchain.pem > /etc/pki/onms/onms-fullchain.pem
+    chmod 644 /etc/pki/onms/*.pem
+    chmod 600 /etc/pki/onms/*-key.pem
+    cp /etc/nginx/nginx.conf /etc/nginx/nginx.conf.bak
+    cp /root/nginx-pki.conf /etc/nginx/nginx.conf
+    semanage permissive -a httpd_t
+    systemctl --now enable nginx
+
+- owner: root:root
+  permissions: '0755'
+  path: /opt/opennms/bin/install-security.sh
+  content: |
+    security_enabled="${security_enabled}"
+    use_pki="${use_pki}"
+    if [ "$security_enabled" != "true" ] || [ "$use_pki" == "true" ]; then
+      echo "Security without PKI is not enabled"
+      exit
+    fi
+    echo "Creating Certificate for Nginx via LetsEncrypt..."
+    dnf install -y certbot python3-certbot-nginx
     mkdir -p /var/www/${public_fqdn}/.well-known
     chown nginx:nginx /var/www
     setsebool -P httpd_can_network_connect 1
     systemctl --now enable nginx
     sleep 5
     certbot --nginx -d ${public_fqdn} --non-interactive --agree-tos -m ${email}
+
+- owner: root:root
+  permissions: '0755'
+  path: /opt/opennms/bin/enable-security.sh
+  content: |
+    #!/bin/bash
+    if [ "${security_enabled}" != "true" ]; then
+      echo "Security is not enabled"
+      exit
+    fi
     sed -i -r "s|^;domain =.*|domain = ${public_fqdn}|" /etc/grafana/grafana.ini
     sed -i -r "s|^;root_url =.*|root_url = %(protocol)s://%(domain)s:%(http_port)s/grafana/|" /etc/grafana/grafana.ini
     cat <<EOF > /opt/opennms/etc/opennms.properties.d/webui.properties
@@ -173,6 +332,8 @@ packages:
 - epel-release
 - java-11-openjdk-devel
 - postgresql-server
+- nginx
+- policycoreutils-python-utils
 
 runcmd:
 - sysctl --system
@@ -195,6 +356,8 @@ runcmd:
 - sed -r -i 's/enabled="false"/enabled="true"/' /opt/opennms/etc/telemetryd-configuration.xml
 - /opt/opennms/bin/runjava -s
 - /opt/opennms/bin/install -dis
-- /tmp/enable-security.sh
+- /opt/opennms/bin/install-security.sh
+- /opt/opennms/bin/install-security-private.sh
+- /opt/opennms/bin/enable-security.sh
 - systemctl --now enable opennms
 - systemctl --now enable grafana-server

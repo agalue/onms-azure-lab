@@ -89,14 +89,20 @@ data "template_file" "opennms" {
   vars = {
     user             = var.username
     location         = var.location
-    email            = var.email
+    email            = var.email  # Used only with LetsEncrypt
     onms_repo        = var.onms_repo
     onms_version     = var.onms_version
     heap_size        = var.heap_size.opennms
     security_enabled = var.security.enabled
+    use_pki          = var.security.use_pki
     kafka_user       = var.security.kafka_user
     kafka_passwd     = var.security.kafka_passwd
     public_fqdn      = "${local.onms_vm_name}.${var.location}.cloudapp.azure.com"
+
+    # Used only with Private Certificates generation
+    ca_root_pem         = base64encode(file("./pki/ca-root.pem"))
+    ca_intermediate_pem = base64encode(file("./pki/ca-intermediate.pem"))
+    ca_intermediate_key = base64encode(file("./pki/ca-intermediate-key.pem"))
 
     # The following are defined this way to enforce the dependency against the external applications
     kafka_bootstrap = "${azurerm_linux_virtual_machine.kafka.name}:9092"
