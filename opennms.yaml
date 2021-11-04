@@ -1,5 +1,6 @@
 #cloud-config
 package_upgrade: false
+timezone: America/New_York
 
 write_files:
 - owner: root:root

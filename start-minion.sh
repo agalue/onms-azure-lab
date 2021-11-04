@@ -47,6 +47,7 @@ done
 
 # Start Minion via Docker
 docker run --name minion -it --rm \
+ -e TZ=America/New_York \
  -e OPENNMS_HTTP_USER=admin \
  -e OPENNMS_HTTP_PASS=admin \
  -e JAVA_OPTS="-Djavax.net.ssl.trustStore=/opt/minion/etc/$jks_file -Djavax.net.ssl.trustStorePassword=${jks_passwd}" \
