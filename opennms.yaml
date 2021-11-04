@@ -353,7 +353,7 @@ runcmd:
 
 # Configure and start OpenNMS and Grafana
 - echo 'JAVA_HEAP_SIZE=${heap_size}' > /opt/opennms/etc/opennms.conf
-- sed -r -i 's/enabled="false"/enabled="true"/' /opt/opennms/etc/telemetryd-configuration.xml
+- sed -r -i -E '/(Netflow|IPFIX|SFlow)/s/enabled="false"/enabled="true"/' /opt/opennms/etc/telemetryd-configuration.xml
 - /opt/opennms/bin/runjava -s
 - /opt/opennms/bin/install -dis
 - /opt/opennms/bin/install-security.sh
